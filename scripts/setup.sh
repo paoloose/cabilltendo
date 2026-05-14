@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# ---------------------------
+# Cabilltendo: main setup script
+#
+# Run from the repo root:
+#    sudo bash scripts/setup.sh
+#
+# Override any config variable via environment:
+#    CABILLTENDO_ROOT=/custom/path sudo bash scripts/setup.sh
+#
+# Templates live in   ../templates/   (relative to this script)
+# Config defaults in  config.sh
+# ---------------------------
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+export CABILLTENDO_ROOT="${CABILLTENDO_ROOT:-$(dirname "$SCRIPT_DIR")}"
+source "${SCRIPT_DIR}/config.sh"
+
+log() { echo "[setup]    $*" | tee -a "${SETUP_LOG}"; }
+abort() { log "ABORT: $*"; exit 1; }
+
+if [ "$(id -u)" -ne 0 ]; then abort "This script must be run as root."; fi
+
+touch "${SETUP_LOG}"
+log " ▗▄▄▖▗▞▀▜▌▗▖   ▄ █ █    ■  ▗▞▀▚▖▄▄▄▄     ▐▌ ▄▄▄  "
+log "▐▌   ▝▚▄▟▌▐▌   ▄ █ █ ▗▄▟▙▄▖▐▛▀▀▘█   █    ▐▌█   █ "
+log "▐▌        ▐▛▀▚▖█ █ █   ▐▌  ▝▚▄▄▖█   █ ▗▞▀▜▌▀▄▄▄▀ "
+log "▝▚▄▄▖     ▐▙▄▞▘█ █ █   ▐▌             ▝▚▄▟▌      "
+log "                       ▐▌                        "
+log "                                                 "
+log " Cabilltendo Setup"
+log "   root     = $CABILLTENDO_ROOT"
+log ""
+
+# ---------------------------
+# 1.  DEPLOY  (render templates)
+# ---------------------------
+log "── Deploying templates ──"
+bash "${SCRIPT_DIR}/deploy.sh" all
+
+# ---------------------------
+# 2.  INSTALL SERVICES
+# ---------------------------
+log "── Installing services ──"
+bash "${SCRIPT_DIR}/install_services.sh"
+
+# ---------------------------
+# 3.  PERMISSIONS
+# ---------------------------
+log "── Setting ownership ──"
+chown -R "${USER_NAME}:${USER_NAME}" "${CABILLTENDO_ROOT}"
+
+log "============================================================"
+log " Cabilltendo setup completed!"
+log ""
+log "   Project   : ${CABILLTENDO_ROOT}"
+log "   ROMs      : ${ROMS_DIR}"
+log "   Frontend  : ${CABILLTENDO_ROOT}/launcher.py"
+log "   Remote    : http://<pi-ip>:${REMOTE_PORT}"
+log "   Log       : ${SETUP_LOG}"
+log ""
+log "   Reboot to start"
+log "============================================================"
