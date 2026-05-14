@@ -1,0 +1,4 @@
+mednafen-server
+__pycache__
+.vscode
+roms/extra
