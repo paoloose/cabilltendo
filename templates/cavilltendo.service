@@ -1,0 +1,16 @@
+[Unit]
+Description=Cabilltendo Launcher
+After=bootsplash.service multi-user.target
+Requires=bootsplash.service
+
+[Service]
+User={{USER_NAME}}
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=SDL_AUDIODRIVER=alsa
+EnvironmentFile={{SCRIPTS_DIR}}/config.sh
+ExecStart={{PYTHON_BIN}} {{CABILLTENDO_ROOT}}/launcher.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+[Unit]
+Description=Cabilltendo Boot Splash
+DefaultDependencies=no
+After=systemd-udev-settle.service
+Before=cavilltendo.service
+
+[Service]
+Type=oneshot
+User={{USER_NAME}}
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=SDL_AUDIODRIVER=alsa
+EnvironmentFile={{SCRIPTS_DIR}}/config.sh
+ExecStart={{PYTHON_BIN}} {{CABILLTENDO_ROOT}}/bootsplash.py
+
+[Install]
+WantedBy=multi-user.target
