@@ -23,7 +23,7 @@ from evdev import InputDevice, ecodes, list_devices
 # -- Config (env vars with relative-path fallbacks) ----------
 SCRIPT_DIR = path.dirname(path.abspath(__file__))
 
-MEDNAFEN_BIN   = environ.get('MEDNAFEN_BIN', path.join(SCRIPT_DIR, 'mednafen/src/mednafen'))
+MEDNAFEN_BIN   = environ.get('MEDNAFEN_BIN', path.join(SCRIPT_DIR, 'mednafen'))
 MEDNAFEN_CFG   = environ.get('MEDNAFEN_CFG', '')
 ROMS_DIR       = environ.get('ROMS_DIR', path.join(SCRIPT_DIR, 'roms'))
 FONT_PIXEL     = environ.get('PIXEL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Pixelitta-Regular.ttf'))
@@ -343,9 +343,10 @@ class _USBMonitor:
     def _log(self, msg: str) -> None:
         if not self.log_path:
             return
+        t = time.strftime('%Y-%m-%d %H:%M:%S')
         try:
             with open(self.log_path, 'a') as f:
-                f.write(f'[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n')
+                f.write(f'[{t}] {msg}\n')
         except OSError:
             pass
 
@@ -357,12 +358,13 @@ class _USBMonitor:
             )
             if result.stdout:
                 return result.stdout.split()[0]
-        except Exception:
-            pass
+        except Exception as e:
+            self._log(f'findmnt failed for {device_node}: {e}')
         return None
 
     def _copy_roms(self, mount_point: str) -> int:
         copied = 0
+        self._log(f'Scanning mount point: {mount_point}')
         for root, dirs, files in os.walk(mount_point):
             for fname in files:
                 if fname.startswith('._'):
@@ -377,25 +379,30 @@ class _USBMonitor:
                 dest = path.join(dest_dir, fname)
                 if path.isfile(dest):
                     if self._md5(src) == self._md5(dest):
+                        self._log(f'Skipped (duplicate): {fname}')
                         continue
                     base, _ = os.path.splitext(fname)
                     dest = path.join(dest_dir, f'{base}_new{ext}')
                 try:
                     shutil.copy2(src, dest)
                     copied += 1
-                except OSError:
-                    continue
+                    self._log(f'Copied: {fname} -> {dest}')
+                except OSError as e:
+                    self._log(f'Copy failed: {src} -> {dest}: {e}')
         return copied
 
     def _handle_device(self, device_node: str) -> None:
         self._log(f'USB inserted: {device_node}')
         try:
-            subprocess.run(
+            result = subprocess.run(
                 ['pmount', device_node],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                capture_output=True, text=True, timeout=10,
             )
-        except Exception:
-            self._log(f'pmount failed for {device_node}')
+            if result.returncode != 0:
+                self._log(f'pmount failed for {device_node}: {result.stderr.strip()}')
+                return
+        except Exception as e:
+            self._log(f'pmount exception for {device_node}: {e}')
             return
 
         time.sleep(1)
@@ -405,42 +412,52 @@ class _USBMonitor:
             try:
                 subprocess.run(
                     ['pumount', device_node],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                    capture_output=True, timeout=10,
                 )
             except Exception:
                 pass
             return
 
+        self._log(f'Mounted at: {mount_point}')
         try:
             subprocess.run(
                 ['pkill', '-STOP', 'mednafen'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                capture_output=True,
             )
             copied = self._copy_roms(mount_point)
             self._log(f'Copied {copied} ROM(s) from {device_node}')
             if copied > 0:
                 self.roms_dirty = True
+        except Exception as e:
+            self._log(f'Copy phase failed: {e}')
         finally:
             subprocess.run(
                 ['pkill', '-CONT', 'mednafen'],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                capture_output=True,
             )
             subprocess.run(
                 ['pumount', device_node],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                capture_output=True, timeout=10,
             )
             self._log(f'Unmounted {device_node}')
 
     def _run(self) -> None:
-        context = pyudev.Context()
-        monitor = pyudev.Monitor.from_netlink(context)
-        monitor.filter_by(subsystem='block', device_type='partition')
-        monitor.start()
+        try:
+            context = pyudev.Context()
+            monitor = pyudev.Monitor.from_netlink(context)
+            monitor.filter_by(subsystem='block', device_type='partition')
+            monitor.start()
+        except Exception as e:
+            self._log(f'udev monitor init failed: {e}')
+            return
+
+        self._log('USB monitor started')
 
         while not self._stop.is_set():
             try:
                 device = monitor.poll(timeout=1)
-            except Exception:
+            except Exception as e:
+                self._log(f'poll error: {e}')
                 continue
             if device is None:
                 continue
@@ -450,6 +467,8 @@ class _USBMonitor:
             if not device_node:
                 continue
             self._handle_device(device_node)
+
+        self._log('USB monitor stopped')
 
 
 # -- Helpers -------------------------------------------------------------------
@@ -687,14 +706,18 @@ class Launcher:
             scroll_top = y
             scroll_bot = L.list_y + L.panel_h - L.list_pad
             scroll_area = scroll_bot - scroll_top
-            track_h = max(30, int(max_vis / total * scroll_area))
-            track_y = scroll_top + int(self.scroll_offset / total * scroll_area)
             bar_x = L.panel_x + L.list_w - 10
+
+            # Track (gray background)
             pygame.draw.rect(self.screen, SCROLL_TRACK,
-                             (bar_x, track_y, 5, track_h), border_radius=2)
-            thumb_h = max(14, int(max_vis / total * track_h))
+                             (bar_x, scroll_top, 5, scroll_area), border_radius=2)
+
+            # Thumb (yellow indicator)
+            thumb_h = max(30, int(max_vis / total * scroll_area))
+            max_offset = total - max_vis
+            thumb_y = scroll_top + int(self.scroll_offset / max_offset * (scroll_area - thumb_h))
             pygame.draw.rect(self.screen, GOLD,
-                             (bar_x, track_y, 5, thumb_h), border_radius=2)
+                             (bar_x, thumb_y, 5, thumb_h), border_radius=2)
 
     def _draw_selector(self, x: int, iy: int, item_h: int, is_sel: bool) -> None:
         if not is_sel:
@@ -785,6 +808,10 @@ class Launcher:
         L = self.layout
         br = pygame.Rect(L.bottom_x, L.bottom_y, L.bottom_w, L.bottom_h)
         pygame.draw.rect(self.screen, BOTTOM_BAR, br, border_radius=L.radius)
+        # Square off the top corners so the bar connects flush with the panel
+        r = L.radius
+        pygame.draw.rect(self.screen, BOTTOM_BAR, (br.left, br.top, r, r))
+        pygame.draw.rect(self.screen, BOTTOM_BAR, (br.right - r, br.top, r, r))
 
         pad = max(16, int(L.w * 0.03))
         hint_y = L.bottom_y + (L.bottom_h - int(L.h * 0.03)) // 2
@@ -849,7 +876,7 @@ class Launcher:
             if event.type == pygame.QUIT:
                 self.running = False
 
-            elif not IS_RASPBERRY and event.type == pygame.KEYDOWN:
+            elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
                     self._navigate(-1)
                 elif event.key == pygame.K_DOWN:
