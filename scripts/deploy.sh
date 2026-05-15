@@ -72,7 +72,6 @@ deploy_all() {
     deploy_one "bootsplash.service"         "/etc/systemd/system/bootsplash.service"                  0
     deploy_one "cavilltendo.service"        "/etc/systemd/system/cavilltendo.service"                 0
     deploy_one "cavilltendo-remote.service" "/etc/systemd/system/cavilltendo-remote.service"      0
-    deploy_one "99-usb-roms.rules"          "/etc/udev/rules.d/99-usb-roms.rules"                    0
 }
 
 # --- Entry point----
