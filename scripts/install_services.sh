@@ -1,16 +1,14 @@
 #!/bin/bash
 
-# -- Systemd & udev activation
+# -- Systemd activation
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 log() { echo "[systemd]  $*" | tee -a "${SETUP_LOG}"; }
 
-log "Reloading systemd & udev …"
+log "Reloading systemd …"
 systemctl daemon-reload
-udevadm control --reload-rules
-udevadm trigger
 
 log "Enabling services …"
 systemctl enable bootsplash.service

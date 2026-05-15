@@ -36,7 +36,23 @@ log "   root     = $CABILLTENDO_ROOT"
 log ""
 
 # ---------------------------
-# 1.  DEPLOY  (render templates)
+# 1.  INSTALL DEPENDENCIES
+# ---------------------------
+log "── Installing dependencies ──"
+apt-get update -qq
+apt-get install -y -qq \
+    mednafen \
+    python3-pygame \
+    python3-evdev \
+    python3-pyudev \
+    python3-flask \
+    pmount \
+    fonts-freefont-ttf \
+    > /dev/null 2>&1 || abort "Failed to install dependencies."
+log "  Dependencies installed."
+
+# ---------------------------
+# 2.  DEPLOY  (render templates)
 # ---------------------------
 log "── Deploying templates ──"
 bash "${SCRIPT_DIR}/deploy.sh" all
@@ -52,6 +68,7 @@ bash "${SCRIPT_DIR}/install_services.sh"
 # ---------------------------
 log "── Setting ownership ──"
 chown -R "${USER_NAME}:${USER_NAME}" "${CABILLTENDO_ROOT}"
+usermod -aG plugdev,video,input,tty "${USER_NAME}"
 
 log "============================================================"
 log " Cabilltendo setup completed!"
