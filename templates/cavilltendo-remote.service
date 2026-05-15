@@ -4,8 +4,7 @@ After=network.target
 
 [Service]
 User={{USER_NAME}}
-EnvironmentFile={{SCRIPTS_DIR}}/config.sh
-ExecStart={{PYTHON_BIN}} {{REMOTE_DIR}}/server.py
+ExecStart={{SCRIPTS_DIR}}/run_remote.sh
 Restart=always
 
 [Install]

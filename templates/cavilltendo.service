@@ -5,10 +5,7 @@ Requires=bootsplash.service
 
 [Service]
 User={{USER_NAME}}
-Environment=SDL_VIDEODRIVER=kmsdrm
-Environment=SDL_AUDIODRIVER=alsa
-EnvironmentFile={{SCRIPTS_DIR}}/config.sh
-ExecStart={{PYTHON_BIN}} {{CABILLTENDO_ROOT}}/launcher.py
+ExecStart={{SCRIPTS_DIR}}/run_launcher.sh
 Restart=on-failure
 RestartSec=3
 
