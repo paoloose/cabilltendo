@@ -1,6 +1,46 @@
-# Console emulator :3
+# Cabilltendo
 
-## Native build
+Mednafen-based console emulator for the Raspberry Pi 4s 🍓
+
+## Quick start
+
+Install a simple Raspberry Pi OS that is shipped with `apt` and `systemd`.
+No desktop environment is required for this emulator to work.
+See <https://www.raspberrypi.com/software/operating-systems/>.
+
+Then login in your Raspberry, copy out this entire repository, and execute
+
+```bash
+./setup_raspberrypi4.sh
+```
+
+Once this script is finished, no internet connection is required
+
+## Using a custom embedded OS
+
+I also developed a Docker script on top of [buildroot](https://buildroot.org/) to compile
+your own embedded Linux kernel with only the specific requirements of this project.
+
+However, this will require you to modify important parts of the setup script, specifically
+the installation of dependencies (which your distro will already include), and the
+deployment of `systemd` services (as you probably will be using a lightweight alternative).
+
+## Controls
+
+### Raspberry Pi (gamepad only)
+
+| Button                      | Action                   |
+| --------------------------- | ------------------------ |
+| D-Pad Up / Down             | Navigate ROM list        |
+| A / B (Button 0 / 1)        | Launch selected game     |
+| Select + Start (hold 0.5 s) | Exit launcher            |
+| L1 + R1 (hold 0.5 s)        | Pause / unpause emulator |
+
+## Testing in Linux desktop distros
+
+If you are trying to run this launcher in your mainstream Linux distribution, well you can!
+
+Just **don't** run the installation scrips, are they are intended for the Raspberry Pi only.
 
 ```bash
 sudo apt install build-essential pkg-config libasound2-dev libsdl2-dev libflac-dev zlib1g-dev
