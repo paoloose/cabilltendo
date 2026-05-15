@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import os
-os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
-os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+
+IS_RASPBERRY = 'IS_RASPBERRY' in os.environ
+if IS_RASPBERRY: os.environ['SDL_VIDEODRIVER'] = 'kmsdrm'
+os.environ.setdefault('SDL_AUDIODRIVER', 'alsa')
 
 import pygame
 import subprocess
@@ -126,7 +128,7 @@ def scan_roms(base_dir: str) -> list[RomEntry]:
     if not base.is_dir():
         return entries
     for ext in sorted(ROM_EXTENSIONS):
-        for p in sorted(base.rglob(f"*{ext}")):
+        for p in sorted(base.rglob(f'*{ext}')):
             if p.name.startswith('._'):
                 continue
             console = EXT_TO_CONSOLE.get(ext, UNKNOWN_CONSOLE)
@@ -343,7 +345,7 @@ class _USBMonitor:
             return
         try:
             with open(self.log_path, 'a') as f:
-                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+                f.write(f'[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n')
         except OSError:
             pass
 
@@ -377,7 +379,7 @@ class _USBMonitor:
                     if self._md5(src) == self._md5(dest):
                         continue
                     base, _ = os.path.splitext(fname)
-                    dest = path.join(dest_dir, f"{base}_new{ext}")
+                    dest = path.join(dest_dir, f'{base}_new{ext}')
                 try:
                     shutil.copy2(src, dest)
                     copied += 1
@@ -386,20 +388,20 @@ class _USBMonitor:
         return copied
 
     def _handle_device(self, device_node: str) -> None:
-        self._log(f"USB inserted: {device_node}")
+        self._log(f'USB inserted: {device_node}')
         try:
             subprocess.run(
                 ['pmount', device_node],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
             )
         except Exception:
-            self._log(f"pmount failed for {device_node}")
+            self._log(f'pmount failed for {device_node}')
             return
 
         time.sleep(1)
         mount_point = self._find_mount(device_node)
         if not mount_point:
-            self._log(f"No mount point for {device_node}")
+            self._log(f'No mount point for {device_node}')
             try:
                 subprocess.run(
                     ['pumount', device_node],
@@ -415,7 +417,7 @@ class _USBMonitor:
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             copied = self._copy_roms(mount_point)
-            self._log(f"Copied {copied} ROM(s) from {device_node}")
+            self._log(f'Copied {copied} ROM(s) from {device_node}')
             if copied > 0:
                 self.roms_dirty = True
         finally:
@@ -427,7 +429,7 @@ class _USBMonitor:
                 ['pumount', device_node],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
             )
-            self._log(f"Unmounted {device_node}")
+            self._log(f'Unmounted {device_node}')
 
     def _run(self) -> None:
         context = pyudev.Context()
@@ -554,10 +556,8 @@ class Launcher:
             folder = rom.console.thumbnail_folder
             if not folder:
                 continue
-            title_p = path.join(THUMBNAILS_DIR, folder,
-                                   "Named_Titles", f"{rom.name}.png")
-            logo_p = path.join(THUMBNAILS_DIR, folder,
-                                   "Named_Logos", f"{rom.name}.png")
+            title_p = path.join(THUMBNAILS_DIR, folder, 'Named_Titles', f'{rom.name}.png')
+            logo_p = path.join(THUMBNAILS_DIR, folder, 'Named_Logos', f'{rom.name}.png')
             thumb = Thumbnails()
             if path.isfile(title_p):
                 thumb.title = _load_image(title_p)
