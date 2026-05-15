@@ -9,6 +9,9 @@ import signal
 import select
 import threading
 import time
+import hashlib
+import shutil
+import pyudev
 from os import environ, path
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,7 +29,7 @@ FONT_DIGITAL   = environ.get('DIGITAL_FONT', path.join(SCRIPT_DIR, 'assets/fonts
 CONSOLE_LOGO   = environ.get('LOGO_IMAGE', path.join(SCRIPT_DIR, 'assets/henry.png'))
 SELECTOR_IMAGE = environ.get('SELECTOR_IMAGE', path.join(SCRIPT_DIR, 'assets/selector.png'))
 THUMBNAILS_DIR = environ.get('THUMBNAILS_DIR', path.join(SCRIPT_DIR, 'thumbnails'))
-USB_FLAG_FILE  = environ.get('USB_FLAG', '/tmp/roms_updated')
+USB_LOG_FILE  = environ.get('USB_LOG', '/tmp/usb_roms.log')
 
 # -- Console definitions -------------------
 
@@ -123,9 +126,11 @@ def scan_roms(base_dir: str) -> list[RomEntry]:
     if not base.is_dir():
         return entries
     for ext in sorted(ROM_EXTENSIONS):
-        for path in sorted(base.rglob(f"*{ext}")):
+        for p in sorted(base.rglob(f"*{ext}")):
+            if p.name.startswith('._'):
+                continue
             console = EXT_TO_CONSOLE.get(ext, UNKNOWN_CONSOLE)
-            entries.append(RomEntry(path.stem, str(path), ext, console))
+            entries.append(RomEntry(p.stem, str(p), ext, console))
     return entries
 
 
@@ -294,6 +299,157 @@ class _GamepadHotkey:
                     pass
 
 
+class _USBMonitor:
+    """Background thread that watches for USB mass-storage devices using
+    pyudev and automatically copies new ROMs to the local library.
+
+    When a USB partition is added:
+      1. Mounts it with pmount (no root required)
+      2. Scans for ROM files recursively (skipping macOS resource forks)
+      3. Copies new ROMs with MD5 dedup into ROMS_DIR/<console>/
+      4. Unmounts with pumount
+      5. Sets roms_dirty so the main loop refreshes the game list
+
+    If mednafen is running, it is paused/resumed around the copy
+    to prevent filesystem conflicts.
+    """
+
+    def __init__(self, roms_dir: str, log_path: str = ''):
+        self.roms_dir = roms_dir
+        self.log_path = log_path
+        self.roms_dirty = False
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+
+    def join(self):
+        self._thread.join(timeout=3)
+
+    @staticmethod
+    def _md5(filepath: str) -> str:
+        h = hashlib.md5()
+        with open(filepath, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                h.update(chunk)
+        return h.hexdigest()
+
+    def _log(self, msg: str) -> None:
+        if not self.log_path:
+            return
+        try:
+            with open(self.log_path, 'a') as f:
+                f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+        except OSError:
+            pass
+
+    def _find_mount(self, device_node: str) -> Optional[str]:
+        try:
+            result = subprocess.run(
+                ['findmnt', '-unl', '-S', device_node],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.stdout:
+                return result.stdout.split()[0]
+        except Exception:
+            pass
+        return None
+
+    def _copy_roms(self, mount_point: str) -> int:
+        copied = 0
+        for root, dirs, files in os.walk(mount_point):
+            for fname in files:
+                if fname.startswith('._'):
+                    continue
+                ext = os.path.splitext(fname)[1].lower()
+                console_info = EXT_TO_CONSOLE.get(ext)
+                if console_info is None:
+                    continue
+                dest_dir = path.join(self.roms_dir, console_info.label)
+                os.makedirs(dest_dir, exist_ok=True)
+                src = path.join(root, fname)
+                dest = path.join(dest_dir, fname)
+                if path.isfile(dest):
+                    if self._md5(src) == self._md5(dest):
+                        continue
+                    base, _ = os.path.splitext(fname)
+                    dest = path.join(dest_dir, f"{base}_new{ext}")
+                try:
+                    shutil.copy2(src, dest)
+                    copied += 1
+                except OSError:
+                    continue
+        return copied
+
+    def _handle_device(self, device_node: str) -> None:
+        self._log(f"USB inserted: {device_node}")
+        try:
+            subprocess.run(
+                ['pmount', device_node],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+            )
+        except Exception:
+            self._log(f"pmount failed for {device_node}")
+            return
+
+        time.sleep(1)
+        mount_point = self._find_mount(device_node)
+        if not mount_point:
+            self._log(f"No mount point for {device_node}")
+            try:
+                subprocess.run(
+                    ['pumount', device_node],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                )
+            except Exception:
+                pass
+            return
+
+        try:
+            subprocess.run(
+                ['pkill', '-STOP', 'mednafen'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            copied = self._copy_roms(mount_point)
+            self._log(f"Copied {copied} ROM(s) from {device_node}")
+            if copied > 0:
+                self.roms_dirty = True
+        finally:
+            subprocess.run(
+                ['pkill', '-CONT', 'mednafen'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ['pumount', device_node],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+            )
+            self._log(f"Unmounted {device_node}")
+
+    def _run(self) -> None:
+        context = pyudev.Context()
+        monitor = pyudev.Monitor.from_netlink(context)
+        monitor.filter_by(subsystem='block', device_type='partition')
+        monitor.start()
+
+        while not self._stop.is_set():
+            try:
+                device = monitor.poll(timeout=1)
+            except Exception:
+                continue
+            if device is None:
+                continue
+            if device.action != 'add':
+                continue
+            device_node = device.device_node
+            if not device_node:
+                continue
+            self._handle_device(device_node)
+
+
 # -- Helpers -------------------------------------------------------------------
 
 def _load_image(path: str) -> Optional[pygame.Surface]:
@@ -376,6 +532,9 @@ class Launcher:
             self.joystick.init()
 
         self.running = True
+
+        self.usb_monitor = _USBMonitor(ROMS_DIR, USB_LOG_FILE)
+        self.usb_monitor.start()
 
     # -- thumbnails --------------------------------------------------------
 
@@ -746,16 +905,17 @@ class Launcher:
             self.pattern_offset = (
                 self.pattern_offset + PATTERN_SPEED * dt / 16.0) % 10000.0
 
-            if path.exists(USB_FLAG_FILE):
+            if self.usb_monitor.roms_dirty:
+                self.usb_monitor.roms_dirty = False
                 self._refresh_roms()
-                try: os.remove(USB_FLAG_FILE)
-                except OSError: pass
 
             self.handle_input()
             self.draw()
             pygame.display.flip()
             self.clock.tick(60)
 
+        self.usb_monitor.stop()
+        self.usb_monitor.join()
         pygame.quit()
 
 
