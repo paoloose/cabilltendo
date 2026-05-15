@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
+import os
+os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+os.environ.setdefault("SDL_AUDIODRIVER", "alsa")
+
 import pygame
 import subprocess
-import os
+import signal
+import select
+import threading
+import time
 from os import environ, path
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple
+from evdev import InputDevice, ecodes, list_devices
 
 # -- Config (env vars with relative-path fallbacks) ----------
 SCRIPT_DIR = path.dirname(path.abspath(__file__))
@@ -81,7 +89,13 @@ PATTERN_SPEED   = 0.4
 BLINK_PERIOD_MS = 700
 AXIS_DELAY_MS   = 180
 AXIS_RATE_MS    = 80
-AXIS_DEADZONE   = 0.5
+AXIS_DEADZONE  = 0.5
+
+HOTKEY_HOLD_S  = 0.5
+HOTKEY_SELECT   = {ecodes.BTN_SELECT}
+HOTKEY_START    = {ecodes.BTN_START}
+HOTKEY_L1       = {ecodes.BTN_TL}
+HOTKEY_R1       = {ecodes.BTN_TR}
 
 # -- Data ---------------------
 
@@ -157,6 +171,127 @@ class Layout:
         self.font_pub_lbl= max(8,  int(h * 0.016))
         self.font_pub_nm = max(10, int(h * 0.028))
         self.font_hint   = max(10, int(h * 0.024))
+
+
+# -- Hotkey monitor
+#    runs in a separate thread and watch for keys
+
+class _GamepadHotkey:
+    """Background thread that reads gamepad input via evdev while mednafen
+    owns the display. pygame events are unavailable during emulation, so
+    we read /dev/input devices directly using evdev.
+
+    Hotkey combos (hold for ≥ 0.5 s):
+      Select + Start → SIGTERM mednafen (exit game, return to launcher)
+      L1 + R1        → SIGSTOP/SIGCONT mednafen (pause / unpause game)
+
+    InputDevice file descriptors are closed on thread exit
+    """
+
+    def __init__(self, pid: int):
+        self.pid = pid
+        self._paused = False
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def stop(self):
+        self._stop.set()
+
+    def join(self):
+        self._thread.join(timeout=3)
+
+    @staticmethod
+    def _open_gamepads():
+        """Scan /dev/input for devices with key events and open them."""
+        pads = []
+        for p in list_devices():
+            try:
+                d = InputDevice(p)
+                if ecodes.EV_KEY in d.capabilities(verbose=False):
+                    pads.append(d)
+                else:
+                    d.close()
+            except Exception:
+                continue
+        return pads
+
+    def _run(self):
+        pads = self._open_gamepads()
+        if not pads:
+            return
+
+        sel = start = l1 = r1 = False
+        exit_t = pause_t = 0.0
+
+        try:
+            while not self._stop.is_set():
+                try:
+                    os.kill(self.pid, 0)
+                except ProcessLookupError:
+                    return
+                try:
+                    fds = [p.fd for p in pads]
+                    r, _, _ = select.select(fds, [], [], 0.1)
+                except (OSError, ValueError):
+                    break
+                for fd in r:
+                    for pad in pads:
+                        if pad.fd != fd:
+                            continue
+                        try:
+                            events = pad.read()
+                        except Exception:
+                            continue
+                        for ev in events:
+                            if ev.type != ecodes.EV_KEY:
+                                continue
+                            if ev.code in HOTKEY_SELECT:
+                                sel = ev.value != 0
+                            elif ev.code in HOTKEY_START:
+                                start = ev.value != 0
+                            elif ev.code in HOTKEY_L1:
+                                l1 = ev.value != 0
+                            elif ev.code in HOTKEY_R1:
+                                r1 = ev.value != 0
+
+                            now = time.monotonic()
+                            if sel and start:
+                                if exit_t == 0:
+                                    exit_t = now
+                                elif now - exit_t >= HOTKEY_HOLD_S:
+                                    try:
+                                        os.kill(self.pid, signal.SIGTERM)
+                                    except ProcessLookupError:
+                                        pass
+                                    return
+                            else:
+                                exit_t = 0.0
+
+                            if l1 and r1:
+                                if pause_t == 0:
+                                    pause_t = now
+                                elif now - pause_t >= HOTKEY_HOLD_S:
+                                    try:
+                                        if self._paused:
+                                            os.kill(self.pid, signal.SIGCONT)
+                                        else:
+                                            os.kill(self.pid, signal.SIGSTOP)
+                                    except ProcessLookupError:
+                                        pass
+                                    self._paused = not self._paused
+                                    pause_t = 0.0
+                                    time.sleep(0.3)
+                            else:
+                                pause_t = 0.0
+        finally:
+            for pad in pads:
+                try:
+                    pad.close()
+                except Exception:
+                    pass
 
 
 # -- Helpers -------------------------------------------------------------------
@@ -284,7 +419,7 @@ class Launcher:
     @property
     def _visible_count(self) -> int:
         L = self.layout
-        usable = L.panel_h - L.list_pad * 2 - L.font_section * 2
+        usable = L.panel_h - L.list_pad * 2 - self.font_section.get_height() - max(6, int(L.h * 0.012))
         return max(1, usable // L.item_h)
 
     def ensure_visible(self) -> None:
@@ -390,15 +525,17 @@ class Launcher:
         # --- scrollbar ---
         total = len(self.roms)
         if total > max_vis:
-            sa = L.panel_h - L.list_pad * 2 - L.font_section * 2
-            bar_h = max(30, int(max_vis / total * sa))
-            bar_y = y + int(self.scroll_offset / total * sa)
+            scroll_top = y
+            scroll_bot = L.list_y + L.panel_h - L.list_pad
+            scroll_area = scroll_bot - scroll_top
+            track_h = max(30, int(max_vis / total * scroll_area))
+            track_y = scroll_top + int(self.scroll_offset / total * scroll_area)
             bar_x = L.panel_x + L.list_w - 10
             pygame.draw.rect(self.screen, SCROLL_TRACK,
-                             (bar_x, bar_y, 5, bar_h), border_radius=2)
-            thumb_h = max(14, int(max_vis / total * bar_h))
+                             (bar_x, track_y, 5, track_h), border_radius=2)
+            thumb_h = max(14, int(max_vis / total * track_h))
             pygame.draw.rect(self.screen, GOLD,
-                             (bar_x, bar_y, 5, thumb_h), border_radius=2)
+                             (bar_x, track_y, 5, thumb_h), border_radius=2)
 
     def _draw_selector(self, x: int, iy: int, item_h: int, is_sel: bool) -> None:
         if not is_sel:
@@ -529,14 +666,22 @@ class Launcher:
         if not path.isfile(MEDNAFEN_BIN):
             return
         pygame.display.quit()
+        cmd = [MEDNAFEN_BIN]
+        if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
+            cmd += ['-cfgfile', MEDNAFEN_CFG]
+        cmd.append(rom.path)
+        proc = subprocess.Popen(cmd)
+        hotkey = _GamepadHotkey(proc.pid)
+        hotkey.start()
         try:
-            cmd = [MEDNAFEN_BIN]
-            if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
-                cmd += ['-cfgfile', MEDNAFEN_CFG]
-            cmd.append(rom.path)
-            subprocess.run(cmd)
+            proc.wait()
         except Exception:
-            pass
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+        hotkey.stop()
+        hotkey.join()
         self.screen = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
         pygame.mouse.set_visible(False)
 
@@ -544,16 +689,6 @@ class Launcher:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
-
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    self.running = False
-                elif event.key == pygame.K_UP:
-                    self._navigate(-1)
-                elif event.key == pygame.K_DOWN:
-                    self._navigate(1)
-                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    self._launch_current()
 
             elif event.type == pygame.JOYHATMOTION:
                 if event.value in ((0, 1), (0, -1)):
