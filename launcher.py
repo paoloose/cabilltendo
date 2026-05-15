@@ -849,6 +849,16 @@ class Launcher:
             if event.type == pygame.QUIT:
                 self.running = False
 
+            elif not IS_RASPBERRY and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    self._navigate(-1)
+                elif event.key == pygame.K_DOWN:
+                    self._navigate(1)
+                elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    self._launch_current()
+                elif event.key == pygame.K_ESCAPE:
+                    self.running = False
+
             elif event.type == pygame.JOYHATMOTION:
                 if event.value in ((0, 1), (0, -1)):
                     self._navigate(1 if event.value == (0, -1) else -1)
