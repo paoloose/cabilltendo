@@ -23,7 +23,7 @@ from evdev import InputDevice, ecodes, list_devices
 # -- Config (env vars with relative-path fallbacks) ----------
 SCRIPT_DIR = path.dirname(path.abspath(__file__))
 
-MEDNAFEN_BIN   = environ.get('MEDNAFEN_BIN', path.join(SCRIPT_DIR, 'mednafen'))
+MEDNAFEN_BIN   = environ.get('MEDNAFEN_BIN', 'mednafen')
 MEDNAFEN_CFG   = environ.get('MEDNAFEN_CFG', '')
 ROMS_DIR       = environ.get('ROMS_DIR', path.join(SCRIPT_DIR, 'roms'))
 FONT_PIXEL     = environ.get('PIXEL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Pixelitta-Regular.ttf'))
@@ -831,21 +831,13 @@ class Launcher:
         pygame.draw.rect(self.screen, RED, (br.right - r, br.top, r, r))
 
         pad = max(16, int(L.w * 0.03))
-        hint_y = L.bottom_y + (L.bottom_h - int(L.h * 0.03)) // 2
-        icon_sz = max(10, int(L.h * 0.025))
+        hint_y = L.bottom_y + (L.bottom_h - self.font_game.get_height()) // 2
 
-        lx = L.bottom_x + pad
-        pygame.draw.rect(self.screen, WHITE, (lx, hint_y + 2, icon_sz, icon_sz))
-        pygame.draw.rect(self.screen, RED, (lx + icon_sz * 0.3, hint_y, icon_sz * 0.4, icon_sz + 4))
-        pygame.draw.rect(self.screen, RED, (lx, hint_y + icon_sz * 0.35, icon_sz, icon_sz * 0.4))
         h1 = self.font_game.render(HINT_DPAD, True, WHITE)
-        self.screen.blit(h1, (lx + icon_sz + 10, hint_y + (icon_sz + 4 - h1.get_height()) // 2))
+        self.screen.blit(h1, (L.bottom_x + pad, hint_y))
 
-        rx = L.bottom_x + L.bottom_w - pad
-        cx = rx - int(L.w * 0.07)
-        pygame.draw.circle(self.screen, WHITE, (cx, hint_y + icon_sz // 2 + 2), icon_sz // 2 + 1)
         h2 = self.font_game.render(HINT_START, True, WHITE)
-        self.screen.blit(h2, (cx + icon_sz // 2 + 8, hint_y + (icon_sz + 4 - h2.get_height()) // 2))
+        self.screen.blit(h2, (L.bottom_x + L.bottom_w - pad - h2.get_width(), hint_y))
 
     def draw(self) -> None:
         self._draw_bg()
@@ -888,32 +880,34 @@ class Launcher:
 
     def _launch_current(self) -> None:
         if not self.roms:
-            print('[launcher] no ROMs, ignoring Enter', flush=True)
+            self._notify_text = 'No ROMs found'
+            self._notify_until = pygame.time.get_ticks() + 3000
             return
         rom = self.roms[self.selected]
-        if not path.isfile(MEDNAFEN_BIN):
-            print(f'[launcher] mednafen not found: {MEDNAFEN_BIN}', flush=True)
-            return
-        print(f'[launcher] launching: {rom.path}', flush=True)
         pygame.display.quit()
-        cmd = [MEDNAFEN_BIN]
-        if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
-            cmd += ['-cfgfile', MEDNAFEN_CFG]
-        cmd.append(rom.path)
-        proc = subprocess.Popen(cmd)
-        hotkey = _GamepadHotkey(proc.pid)
-        hotkey.start()
         try:
-            proc.wait()
-        except Exception:
+            cmd = [MEDNAFEN_BIN]
+            if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
+                cmd += ['-cfgfile', MEDNAFEN_CFG]
+            cmd.append(rom.path)
+            proc = subprocess.Popen(cmd)
+            hotkey = _GamepadHotkey(proc.pid)
+            hotkey.start()
             try:
-                proc.terminate()
+                proc.wait()
             except Exception:
-                pass
-        hotkey.stop()
-        hotkey.join()
-        self.screen = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
-        pygame.mouse.set_visible(False)
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+            hotkey.stop()
+            hotkey.join()
+        except Exception as e:
+            self._notify_text = f'Launch failed: {e}'
+            self._notify_until = pygame.time.get_ticks() + 4000
+        finally:
+            self.screen = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
+            pygame.mouse.set_visible(False)
 
     def handle_input(self) -> None:
         now = pygame.time.get_ticks()
@@ -926,6 +920,9 @@ class Launcher:
                     self._launch_current()
                 elif event.key == pygame.K_ESCAPE:
                     self.running = False
+                elif event.key not in (pygame.K_UP, pygame.K_DOWN):
+                    self._notify_text = f'Key pressed: {pygame.key.name(event.key)}'
+                    self._notify_until = pygame.time.get_ticks() + 2000
 
             elif event.type == pygame.JOYHATMOTION:
                 if event.value in ((0, 1), (0, -1)):
