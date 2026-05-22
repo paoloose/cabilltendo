@@ -17,7 +17,7 @@ import pyudev
 from os import environ, path
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from evdev import InputDevice, ecodes, list_devices
 
 # -- Config (env vars with relative-path fallbacks) ----------
@@ -78,7 +78,7 @@ DARK_BLUE     = (26,  26,  110)
 WHITE         = (255, 255, 255)
 PANEL_BG      = (0,   0,   0)
 PREVIEW_BG    = (17,  17,  17)
-BOTTOM_BAR    = (204, 34,  34)
+RED           = (204, 34,  34)
 ARROW_BLUE    = (68,  136, 255)
 GOLD_TITLE    = (224, 192, 104)
 MUTED         = (136, 136, 136)
@@ -95,6 +95,9 @@ BLINK_PERIOD_MS = 700
 AXIS_DELAY_MS   = 180
 AXIS_RATE_MS    = 80
 AXIS_DEADZONE  = 0.5
+
+NOTIFY_DURATION_MS = 4000
+NOTIFY_FADE_MS     = 500
 
 HOTKEY_HOLD_S  = 0.5
 HOTKEY_SELECT   = {ecodes.BTN_SELECT}
@@ -320,6 +323,7 @@ class _USBMonitor:
         self.roms_dir = roms_dir
         self.log_path = log_path
         self.roms_dirty = False
+        self.new_rom_paths: List[str] = []
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
@@ -362,18 +366,18 @@ class _USBMonitor:
             self._log(f'findmnt failed for {device_node}: {e}')
         return None
 
-    def _copy_roms(self, mount_point: str) -> int:
+    def _copy_roms(self, mount_point: str) -> Tuple[int, List[str]]:
         copied = 0
+        new_paths: List[str] = []
+        dest_dir = path.join(self.roms_dir, 'from_usb')
         self._log(f'Scanning mount point: {mount_point}')
         for root, dirs, files in os.walk(mount_point):
             for fname in files:
                 if fname.startswith('._'):
                     continue
                 ext = os.path.splitext(fname)[1].lower()
-                console_info = EXT_TO_CONSOLE.get(ext)
-                if console_info is None:
+                if ext not in ROM_EXTENSIONS:
                     continue
-                dest_dir = path.join(self.roms_dir, console_info.label)
                 os.makedirs(dest_dir, exist_ok=True)
                 src = path.join(root, fname)
                 dest = path.join(dest_dir, fname)
@@ -386,10 +390,11 @@ class _USBMonitor:
                 try:
                     shutil.copy2(src, dest)
                     copied += 1
+                    new_paths.append(dest)
                     self._log(f'Copied: {fname} -> {dest}')
                 except OSError as e:
                     self._log(f'Copy failed: {src} -> {dest}: {e}')
-        return copied
+        return copied, new_paths
 
     def _handle_device(self, device_node: str) -> None:
         self._log(f'USB inserted: {device_node}')
@@ -424,9 +429,10 @@ class _USBMonitor:
                 ['pkill', '-STOP', 'mednafen'],
                 capture_output=True,
             )
-            copied = self._copy_roms(mount_point)
+            copied, new_paths = self._copy_roms(mount_point)
             self._log(f'Copied {copied} ROM(s) from {device_node}')
             if copied > 0:
+                self.new_rom_paths = new_paths
                 self.roms_dirty = True
         except Exception as e:
             self._log(f'Copy phase failed: {e}')
@@ -558,6 +564,10 @@ class Launcher:
 
         self.running = True
 
+        self._new_rom_paths: set[str] = set()
+        self._notify_text = ''
+        self._notify_until = 0
+
         self.usb_monitor = _USBMonitor(ROMS_DIR, USB_LOG_FILE)
         self.usb_monitor.start()
 
@@ -649,13 +659,16 @@ class Launcher:
         self.screen.blit(ts, (tx, ty))
 
         sub = self.font_title.render(LOGO_SUBTITLE, True, GOLD)
-        self.screen.blit(sub, (cx - sub.get_width() // 2,
-                                ty + ts.get_height()))
+        self.screen.blit(sub, (cx - sub.get_width() // 2, ty + ts.get_height()))
 
     def _draw_panel(self) -> None:
         L = self.layout
         r = pygame.Rect(L.panel_x, L.panel_y, L.panel_w, L.panel_h)
         pygame.draw.rect(self.screen, PANEL_BG, r, border_radius=L.radius)
+        # Square off bottom corners so the panel connects flush with the bar
+        rad = L.radius
+        pygame.draw.rect(self.screen, PANEL_BG, (r.left, r.bottom - rad, rad, rad))
+        pygame.draw.rect(self.screen, PANEL_BG, (r.right - rad, r.bottom - rad, rad, rad))
         sep_x = L.panel_x + L.list_w
         pygame.draw.line(self.screen, SEP_GRAY,
                          (sep_x, L.panel_y + 8), (sep_x, L.panel_y + L.panel_h - 8), 2)
@@ -688,11 +701,20 @@ class Launcher:
 
             self._draw_selector(x, iy, L.item_h, is_sel)
 
+            name_x = x + 55
+            max_w = L.list_x + L.list_w - L.list_pad - name_x - 4
+
+            # "NEW" tag for recently added ROMs
+            if rom.path in self._new_rom_paths:
+                tag = self.font_pub_nm.render('(NEW)', True, RED)
+                self.screen.blit(tag, (name_x, iy + (L.item_h - tag.get_height()) // 2))
+                name_x += tag.get_width() + 12
+                max_w -= tag.get_width() + 12
+
             ns = self.font_game.render(rom.name, True, WHITE)
-            max_w = L.list_x + L.list_w - L.list_pad - (x + 60) - 4
             if ns.get_width() > max_w and max_w > 0:
                 ns = ns.subsurface((0, 0, max_w, ns.get_height()))
-            self.screen.blit(ns, (x + 60,
+            self.screen.blit(ns, (name_x,
                                   iy + (L.item_h - ns.get_height()) // 2))
 
         # --- scrollbar ---
@@ -802,11 +824,11 @@ class Launcher:
     def _draw_bottom_bar(self) -> None:
         L = self.layout
         br = pygame.Rect(L.bottom_x, L.bottom_y, L.bottom_w, L.bottom_h)
-        pygame.draw.rect(self.screen, BOTTOM_BAR, br, border_radius=L.radius)
+        pygame.draw.rect(self.screen, RED, br, border_radius=L.radius)
         # Square off the top corners so the bar connects flush with the panel
         r = L.radius
-        pygame.draw.rect(self.screen, BOTTOM_BAR, (br.left, br.top, r, r))
-        pygame.draw.rect(self.screen, BOTTOM_BAR, (br.right - r, br.top, r, r))
+        pygame.draw.rect(self.screen, RED, (br.left, br.top, r, r))
+        pygame.draw.rect(self.screen, RED, (br.right - r, br.top, r, r))
 
         pad = max(16, int(L.w * 0.03))
         hint_y = L.bottom_y + (L.bottom_h - int(L.h * 0.03)) // 2
@@ -814,21 +836,16 @@ class Launcher:
 
         lx = L.bottom_x + pad
         pygame.draw.rect(self.screen, WHITE, (lx, hint_y + 2, icon_sz, icon_sz))
-        pygame.draw.rect(self.screen, BOTTOM_BAR,
-                         (lx + icon_sz * 0.3, hint_y, icon_sz * 0.4, icon_sz + 4))
-        pygame.draw.rect(self.screen, BOTTOM_BAR,
-                         (lx, hint_y + icon_sz * 0.35, icon_sz, icon_sz * 0.4))
+        pygame.draw.rect(self.screen, RED, (lx + icon_sz * 0.3, hint_y, icon_sz * 0.4, icon_sz + 4))
+        pygame.draw.rect(self.screen, RED, (lx, hint_y + icon_sz * 0.35, icon_sz, icon_sz * 0.4))
         h1 = self.font_game.render(HINT_DPAD, True, WHITE)
-        self.screen.blit(h1, (lx + icon_sz + 10,
-                              hint_y + (icon_sz + 4 - h1.get_height()) // 2))
+        self.screen.blit(h1, (lx + icon_sz + 10, hint_y + (icon_sz + 4 - h1.get_height()) // 2))
 
         rx = L.bottom_x + L.bottom_w - pad
         cx = rx - int(L.w * 0.07)
-        pygame.draw.circle(self.screen, WHITE, (cx, hint_y + icon_sz // 2 + 2),
-                           icon_sz // 2 + 1)
+        pygame.draw.circle(self.screen, WHITE, (cx, hint_y + icon_sz // 2 + 2), icon_sz // 2 + 1)
         h2 = self.font_game.render(HINT_START, True, WHITE)
-        self.screen.blit(h2, (cx + icon_sz // 2 + 8,
-                              hint_y + (icon_sz + 4 - h2.get_height()) // 2))
+        self.screen.blit(h2, (cx + icon_sz // 2 + 8, hint_y + (icon_sz + 4 - h2.get_height()) // 2))
 
     def draw(self) -> None:
         self._draw_bg()
@@ -837,15 +854,47 @@ class Launcher:
         self._draw_game_list()
         self._draw_preview()
         self._draw_bottom_bar()
+        self._draw_notification()
+
+    def _draw_notification(self) -> None:
+        if not self._notify_text:
+            return
+        now = pygame.time.get_ticks()
+        remaining = self._notify_until - now
+        if remaining <= 0:
+            self._notify_text = ''
+            return
+
+        L = self.layout
+        pad = int(L.w * 0.025)
+        ns = self.font_section.render(self._notify_text, True, WHITE)
+        bw = ns.get_width() + pad * 2
+        bh = ns.get_height() + pad
+        bx = self.W - bw - pad
+        by = pad * 2
+
+        # Fade out in last NOTIFY_FADE_MS
+        alpha = 200
+        if remaining < NOTIFY_FADE_MS:
+            alpha = int(200 * remaining / NOTIFY_FADE_MS)
+
+        s = pygame.Surface((bw, bh), pygame.SRCALPHA)
+        s.fill((*INFO_BAR, alpha))
+        pygame.draw.rect(s, (*GOLD, alpha), s.get_rect(), width=1, border_radius=4)
+        s.blit(ns, (pad, (bh - ns.get_height()) // 2))
+        self.screen.blit(s, (bx, by))
 
     # -- input ------------------
 
     def _launch_current(self) -> None:
         if not self.roms:
+            print('[launcher] no ROMs, ignoring Enter', flush=True)
             return
         rom = self.roms[self.selected]
         if not path.isfile(MEDNAFEN_BIN):
+            print(f'[launcher] mednafen not found: {MEDNAFEN_BIN}', flush=True)
             return
+        print(f'[launcher] launching: {rom.path}', flush=True)
         pygame.display.quit()
         cmd = [MEDNAFEN_BIN]
         if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
@@ -968,6 +1017,11 @@ class Launcher:
 
             if self.usb_monitor.roms_dirty:
                 self.usb_monitor.roms_dirty = False
+                self._new_rom_paths = set(self.usb_monitor.new_rom_paths)
+                n = len(self.usb_monitor.new_rom_paths)
+                self._notify_text = f'{n} games were added via USB'
+                self._notify_until = pygame.time.get_ticks() + NOTIFY_DURATION_MS
+                self.usb_monitor.new_rom_paths = []
                 self._refresh_roms()
 
             self.handle_input()
