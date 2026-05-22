@@ -547,6 +547,10 @@ class Launcher:
         self._start_held = False
         self.joy_up_ms = 0
         self.joy_down_ms = 0
+        self._kbd_up_hms = 0
+        self._kbd_down_hms = 0
+        self._kbd_up_phase = 0
+        self._kbd_down_phase = 0
         self.joystick = None
         if pygame.joystick.get_count() > 0:
             self.joystick = pygame.joystick.Joystick(0)
@@ -608,20 +612,11 @@ class Launcher:
             self.scroll_offset = self.selected - max_vis + 1
 
     def _navigate(self, delta: int) -> None:
-        n = self.selected + delta
-        if 0 <= n < len(self.roms):
-            self.selected = n
-            self.ensure_visible()
+        if not self.roms:
+            return
+        self.selected = (self.selected + delta) % len(self.roms)
+        self.ensure_visible()
 
-    def _axis_nav(self, axis_val: float, timer: int) -> int:
-        """Return updated timer (ms) after handling axis navigation."""
-        if abs(axis_val) < AXIS_DEADZONE:
-            return 0
-        now = pygame.time.get_ticks()
-        if now - timer < AXIS_DELAY_MS:
-            return timer
-        self._navigate(-1 if axis_val < 0 else 1)
-        return now
 
     # -- drawing ----------
 
@@ -872,16 +867,13 @@ class Launcher:
         pygame.mouse.set_visible(False)
 
     def handle_input(self) -> None:
+        now = pygame.time.get_ticks()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    self._navigate(-1)
-                elif event.key == pygame.K_DOWN:
-                    self._navigate(1)
-                elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     self._launch_current()
                 elif event.key == pygame.K_ESCAPE:
                     self.running = False
@@ -892,11 +884,7 @@ class Launcher:
 
             elif event.type == pygame.JOYAXISMOTION:
                 if event.axis == 1:
-                    if event.value < -AXIS_DEADZONE:
-                        self.joy_up_ms = self._axis_nav(event.value, self.joy_up_ms)
-                    elif event.value > AXIS_DEADZONE:
-                        self.joy_down_ms = self._axis_nav(event.value, self.joy_down_ms)
-                    else:
+                    if abs(event.value) < AXIS_DEADZONE:
                         self.joy_up_ms = self.joy_down_ms = 0
 
             elif event.type == pygame.JOYBUTTONDOWN:
@@ -916,8 +904,44 @@ class Launcher:
         if self._select_held and self._start_held:
             self.running = False
 
+        # Keyboard held-repeat (continuous navigation)
+        keys = pygame.key.get_pressed()
+        if not keys[pygame.K_UP]:
+            self._kbd_up_hms = 0
+            self._kbd_up_phase = 0
+        elif self._kbd_up_phase == 0:
+            self._navigate(-1)
+            self._kbd_up_hms = now
+            self._kbd_up_phase = 1
+        elif (self._kbd_up_phase == 1
+              and now - self._kbd_up_hms > AXIS_DELAY_MS):
+            self._navigate(-1)
+            self._kbd_up_hms = now
+            self._kbd_up_phase = 2
+        elif (self._kbd_up_phase == 2
+              and now - self._kbd_up_hms > AXIS_RATE_MS):
+            self._navigate(-1)
+            self._kbd_up_hms = now
+
+        if not keys[pygame.K_DOWN]:
+            self._kbd_down_hms = 0
+            self._kbd_down_phase = 0
+        elif self._kbd_down_phase == 0:
+            self._navigate(1)
+            self._kbd_down_hms = now
+            self._kbd_down_phase = 1
+        elif (self._kbd_down_phase == 1
+              and now - self._kbd_down_hms > AXIS_DELAY_MS):
+            self._navigate(1)
+            self._kbd_down_hms = now
+            self._kbd_down_phase = 2
+        elif (self._kbd_down_phase == 2
+              and now - self._kbd_down_hms > AXIS_RATE_MS):
+            self._navigate(1)
+            self._kbd_down_hms = now
+
+        # Joystick axis held-repeat
         if self.joystick:
-            now = pygame.time.get_ticks()
             try:
                 av = self.joystick.get_axis(1)
                 if av < -AXIS_DEADZONE and now - self.joy_up_ms > AXIS_RATE_MS:
