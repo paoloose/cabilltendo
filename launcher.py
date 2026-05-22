@@ -866,12 +866,12 @@ class Launcher:
             return
 
         L = self.layout
-        pad = int(L.w * 0.025)
+        pad = int(L.w * 0.02)
         ns = self.font_section.render(self._notify_text, True, WHITE)
         bw = ns.get_width() + pad * 2
         bh = ns.get_height() + pad
         bx = self.W - bw - pad
-        by = pad * 2
+        by = pad
 
         # Fade out in last NOTIFY_FADE_MS
         alpha = 200
