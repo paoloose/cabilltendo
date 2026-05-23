@@ -21,9 +21,13 @@ Once this script is finished, no internet connection is required
 I also developed a Docker script on top of [buildroot](https://buildroot.org/) to compile
 your own embedded Linux kernel with only the specific requirements of this project.
 
+<!--
 However, this will require you to modify important parts of the setup script, specifically
 the installation of dependencies (which your distro will already include), and the
 deployment of `systemd` services (as you probably will be using a lightweight alternative).
+-->
+
+Take a look at the repo! <https://github.com/paoloose/buildroot>
 
 ## Controls
 
