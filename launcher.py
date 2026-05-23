@@ -24,7 +24,7 @@ from evdev import InputDevice, ecodes, list_devices
 SCRIPT_DIR = path.dirname(path.abspath(__file__))
 
 MEDNAFEN_BIN   = environ.get('MEDNAFEN_BIN', 'mednafen')
-MEDNAFEN_CFG   = environ.get('MEDNAFEN_CFG', '')
+MEDNAFEN_CFG   = environ.get('MEDNAFEN_CFG', path.join(SCRIPT_DIR, 'templates', 'mednafen.cfg'))
 ROMS_DIR       = environ.get('ROMS_DIR', path.join(SCRIPT_DIR, 'roms'))
 FONT_PIXEL     = environ.get('PIXEL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Pixelitta-Regular.ttf'))
 FONT_DIGITAL   = environ.get('DIGITAL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Digital808.ttf'))
@@ -886,9 +886,9 @@ class Launcher:
         rom = self.roms[self.selected]
         pygame.display.quit()
         try:
-            cmd = [MEDNAFEN_BIN]
+            cmd = [MEDNAFEN_BIN, '-video.fs', '1']
             if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
-                cmd += ['-cfgfile', MEDNAFEN_CFG]
+                cmd += ['-ovconfig', MEDNAFEN_CFG]
             cmd.append(rom.path)
             proc = subprocess.Popen(cmd)
             hotkey = _GamepadHotkey(proc.pid)
