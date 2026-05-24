@@ -2,6 +2,8 @@
 
 Mednafen-based console emulator for the Raspberry Pi 4 🍓
 
+https://github.com/user-attachments/assets/ae103b7e-595c-459e-a63b-a1d0573e3775
+
 ## Quick start
 
 Install a simple Raspberry Pi OS that is shipped with `apt` and `systemd`.
