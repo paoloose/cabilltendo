@@ -22,11 +22,18 @@ process_template() {
     local varname
 
     while IFS= read -r varname; do
+        [ -n "$varname" ] || continue
+        # Skip bash special variables that fail indirect expansion under set -u
+        case "$varname" in
+            BASH_ALIASES|BASH_ARGC|BASH_ARGV|BASH_CMDS|BASH_LINENO|BASH_SOURCE|BASH_VERSINFO|GROUPS|DIRSTACK|FUNCNAME|PIPESTATUS|COMPREPLY) continue ;;
+        esac
+        # Ensure the variable is actually set before indirect expansion
+        [ -n "${!varname:-}" ] || continue
         content="${content//\{\{$varname\}\}/${!varname}}"
     done < <(compgen -v 2>/dev/null | grep -E '^[A-Z][A-Z0-9_]+$' || true)
 
     local leftovers
-    leftovers=$(echo "$content" | { grep -o '\{\{[A-Z_][A-Z0-9_]*\}\}' || true; } | sort -u)
+    leftovers=$(echo "$content" | { grep -oE '\{\{[A-Z_][A-Z0-9_]*\}\}' || true; } | sort -u)
     if [ -n "$leftovers" ]; then
         log "ERROR  Unresolved placeholders:"
         printf '%s\n' "$leftovers" | while read -r p; do log "       $p"; done

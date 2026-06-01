@@ -41,7 +41,9 @@ log ""
 log "── Installing dependencies ──"
 apt-get update -qq
 apt-get install -y -qq \
+    nodm \
     mednafen \
+    python3-venv \
     python3-pygame \
     python3-evdev \
     python3-pyudev \
@@ -50,6 +52,17 @@ apt-get install -y -qq \
     fonts-freefont-ttf \
     > /dev/null 2>&1 || abort "Failed to install dependencies."
 log "  Dependencies installed."
+
+# ---------------------------
+# 1b. PYTHON VENV
+# ---------------------------
+log "── Setting up Python venv ──"
+if [ ! -d "${VENV_DIR}" ]; then
+    sudo -u "${USER_NAME}" python3 -m venv --system-site-packages "${VENV_DIR}"
+    log "  Created venv at ${VENV_DIR}"
+else
+    log "  Venv already exists at ${VENV_DIR}"
+fi
 
 # ---------------------------
 # 2.  DEPLOY  (render templates)

@@ -2,7 +2,7 @@
 import os
 
 IS_RASPBERRY = 'IS_RASPBERRY' in os.environ
-if IS_RASPBERRY: os.environ['SDL_VIDEODRIVER'] = 'kmsdrm'
+# SDL_VIDEODRIVER is set by the wrapper script (x11 for nodm, kmsdrm for bare KMS)
 os.environ.setdefault('SDL_AUDIODRIVER', 'alsa')
 
 import pygame

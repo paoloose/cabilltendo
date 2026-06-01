@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
-os.environ['SDL_VIDEODRIVER'] = 'kmsdrm'
-os.environ['SDL_AUDIODRIVER'] = 'alsa'
+# SDL_VIDEODRIVER is set by the wrapper script (x11 for nodm, kmsdrm for bare KMS)
+os.environ.setdefault('SDL_AUDIODRIVER', 'alsa')
 from os import path
 
 import pygame

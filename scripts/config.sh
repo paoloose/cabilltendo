@@ -4,7 +4,11 @@
 # Every variable respects the environment:  export VAR="${VAR:-default}"
 
 export CABILLTENDO_ROOT="${CABILLTENDO_ROOT:-$(dirname "$(dirname "${BASH_SOURCE[0]}")")}"
+export VENV_DIR="${VENV_DIR:-${CABILLTENDO_ROOT}/.venv}"
 export PYTHON_BIN="${PYTHON_BIN:-/usr/bin/python3}"
+
+# --- Display (nodm / X11)
+export DISPLAY="${DISPLAY:-:0}"
 
 # --- Paths used by launcher.py at runtime
 export MEDNAFEN_BIN="${MEDNAFEN_BIN:-mednafen}"

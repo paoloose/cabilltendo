@@ -1,13 +1,14 @@
 [Unit]
 Description=Cabilltendo Launcher
-After=bootsplash.service multi-user.target
+After=bootsplash.service
 Requires=bootsplash.service
 
 [Service]
 User={{USER_NAME}}
+Environment=DISPLAY=:0
 ExecStart={{SCRIPTS_DIR}}/run_launcher.sh
 Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=graphical.target
