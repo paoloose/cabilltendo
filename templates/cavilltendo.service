@@ -11,7 +11,7 @@ StandardOutput=tty
 TTYPath=/dev/tty1
 TTYReset=yes
 ExecStartPre=-/bin/sh -c 'echo -ne "\033c" > /dev/tty1'
-ExecStart=/usr/bin/startx {{SCRIPTS_DIR}}/run_launcher.sh -- :0 vt1
+ExecStart=/usr/bin/startx {{SCRIPTS_DIR}}/run_launcher.sh
 Restart=on-failure
 RestartSec=3
 
