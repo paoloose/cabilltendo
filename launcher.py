@@ -966,6 +966,15 @@ class Launcher:
         # Fully release SDL so mednafen can take over display, audio and input
         pygame.quit()
         try:
+            # Enforce pristine config before every launch to prevent accidental overrides
+            try:
+                mednafen_dir = path.expanduser('~/.mednafen')
+                os.makedirs(mednafen_dir, exist_ok=True)
+                if path.exists(MEDNAFEN_CFG):
+                    shutil.copy2(MEDNAFEN_CFG, path.join(mednafen_dir, 'mednafen.cfg'))
+            except Exception as e:
+                print(f"Failed to restore mednafen config: {e}")
+
             cmd = [MEDNAFEN_BIN, '-video.fs', '1']
             cmd.append(rom.path)
             proc = subprocess.Popen(cmd)
