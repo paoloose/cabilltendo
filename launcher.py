@@ -932,6 +932,21 @@ class Launcher:
 
     def handle_input(self) -> None:
         now = pygame.time.get_ticks()
+
+        # Try to detect late-plugged controllers if none are connected
+        if self.joystick is None:
+            if not hasattr(self, '_last_joy_check'):
+                self._last_joy_check = now
+            elif now - self._last_joy_check > 2000:
+                self._last_joy_check = now
+                pygame.joystick.quit()
+                pygame.joystick.init()
+                if pygame.joystick.get_count() > 0:
+                    self.joystick = pygame.joystick.Joystick(0)
+                    self.joystick.init()
+                    self._notify_text = 'Controller connected'
+                    self._notify_until = now + 2000
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
