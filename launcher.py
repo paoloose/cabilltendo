@@ -100,10 +100,10 @@ NOTIFY_DURATION_MS = 4000
 NOTIFY_FADE_MS     = 500
 
 HOTKEY_HOLD_S  = 0.5
-HOTKEY_SELECT   = {ecodes.BTN_SELECT}
-HOTKEY_START    = {ecodes.BTN_START}
-HOTKEY_L1       = {ecodes.BTN_TL}
-HOTKEY_R1       = {ecodes.BTN_TR}
+HOTKEY_SELECT   = {ecodes.BTN_SELECT, ecodes.BTN_BASE3}
+HOTKEY_START    = {ecodes.BTN_START, ecodes.BTN_BASE4}
+HOTKEY_L1       = {ecodes.BTN_TL, ecodes.BTN_BASE5}
+HOTKEY_R1       = {ecodes.BTN_TR, ecodes.BTN_BASE6}
 
 # -- Data ---------------------
 
@@ -933,22 +933,25 @@ class Launcher:
     def handle_input(self) -> None:
         now = pygame.time.get_ticks()
 
-        # Try to detect late-plugged controllers if none are connected
-        if self.joystick is None:
-            if not hasattr(self, '_last_joy_check'):
-                self._last_joy_check = now
-            elif now - self._last_joy_check > 2000:
-                self._last_joy_check = now
+        for event in pygame.event.get():
+            if event.type == pygame.JOYDEVICEREMOVED:
+                pygame.joystick.quit()
+                self.joystick = None
+                self._notify_text = 'Controller disconnected'
+                self._notify_until = now + 2000
+
+            elif event.type == pygame.JOYDEVICEADDED:
+                self._notify_text = 'Controller connected'
+                self._notify_until = now + 2000
                 pygame.joystick.quit()
                 pygame.joystick.init()
-                if pygame.joystick.get_count() > 0:
+                try:
                     self.joystick = pygame.joystick.Joystick(0)
                     self.joystick.init()
-                    self._notify_text = 'Controller connected'
-                    self._notify_until = now + 2000
+                except Exception as e:
+                    print(f'Error initializing joystick: {e}')
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            elif event.type == pygame.QUIT:
                 self.running = False
 
             elif event.type == pygame.KEYDOWN:
