@@ -1125,12 +1125,12 @@ class Launcher:
 
         self.usb_monitor.stop()
         self.usb_monitor.join()
-        pygame.quit()
         if IS_RASPBERRY:
             # First try dbus poweroff (works for unprivileged users on systemd)
             if os.system('dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 "org.freedesktop.login1.Manager.PowerOff" boolean:true') != 0:
                 # Fallback to sudo poweroff
                 os.system('sudo poweroff')
+        pygame.quit()
 
 
 if __name__ == '__main__':
