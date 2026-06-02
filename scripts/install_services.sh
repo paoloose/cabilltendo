@@ -2,7 +2,7 @@
 
 # -- Systemd activation
 
-set -euo pipefail
+set -exuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 log() { echo "[systemd]  $*" | tee -a "${SETUP_LOG}"; }
