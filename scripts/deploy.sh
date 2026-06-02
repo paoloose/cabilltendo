@@ -76,7 +76,6 @@ deploy_all() {
     log "▸ Target prefix:      $CABILLTENDO_ROOT"
 
     deploy_one "mednafen.cfg"               "$MEDNAFEN_CFG"                                          0
-    deploy_one "bootsplash.service"         "/etc/systemd/system/bootsplash.service"                  0
     deploy_one "cavilltendo.service"        "/etc/systemd/system/cavilltendo.service"                 0
     deploy_one "cavilltendo-remote.service" "/etc/systemd/system/cavilltendo-remote.service"      0
 }

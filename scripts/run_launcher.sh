@@ -11,4 +11,5 @@ export SDL_VIDEODRIVER=x11
 export SDL_AUDIODRIVER=alsa
 export IS_RASPBERRY=true
 
-exec python3 "${CABILLTENDO_ROOT}/launcher.py"
+"${PYTHON_BIN}" "${CABILLTENDO_ROOT}/bootsplash.py"
+exec "${PYTHON_BIN}" "${CABILLTENDO_ROOT}/launcher.py"

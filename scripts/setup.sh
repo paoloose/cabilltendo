@@ -41,8 +41,8 @@ log ""
 log "── Installing dependencies ──"
 apt-get update -qq
 apt-get install -y -qq \
-    nodm \
     mednafen \
+    xinit \
     python3-venv \
     python3-pygame \
     python3-evdev \

@@ -10,11 +10,7 @@ log() { echo "[systemd]  $*" | tee -a "${SETUP_LOG}"; }
 log "Reloading systemd …"
 systemctl daemon-reload
 
-log "Ensuring graphical.target is default (required for nodm) …"
-systemctl set-default graphical.target
-
 log "Enabling services …"
-systemctl enable bootsplash.service
 systemctl enable cavilltendo.service
 systemctl enable cavilltendo-remote.service
 
