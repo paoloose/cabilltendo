@@ -965,23 +965,37 @@ class Launcher:
     def handle_input(self) -> None:
         now = pygame.time.get_ticks()
 
-        for event in pygame.event.get():
-            if event.type == pygame.JOYDEVICEREMOVED:
+        try:
+            events = pygame.event.get()
+        except Exception as e:
+            print(f'Error getting events: {e}')
+            try:
                 pygame.joystick.quit()
+                pygame.joystick.init()
                 self.joystick = None
                 self._notify_text = 'Controller disconnected'
                 self._notify_until = now + 2000
+            except Exception:
+                pass
+            events = []
+
+        for event in events:
+            if event.type == pygame.JOYDEVICEREMOVED:
+                if self.joystick and self.joystick.get_instance_id() == event.instance_id:
+                    self.joystick.quit()
+                    self.joystick = None
+                    self._notify_text = 'Controller disconnected'
+                    self._notify_until = now + 2000
 
             elif event.type == pygame.JOYDEVICEADDED:
                 self._notify_text = 'Controller connected'
                 self._notify_until = now + 2000
-                pygame.joystick.quit()
-                pygame.joystick.init()
-                try:
-                    self.joystick = pygame.joystick.Joystick(0)
-                    self.joystick.init()
-                except Exception as e:
-                    print(f'Error initializing joystick: {e}')
+                if self.joystick is None:
+                    try:
+                        self.joystick = pygame.joystick.Joystick(event.device_index)
+                        self.joystick.init()
+                    except Exception as e:
+                        print(f'Error initializing joystick: {e}')
 
             elif event.type == pygame.QUIT:
                 self.running = False
@@ -1140,8 +1154,8 @@ class Launcher:
             if os.system('dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 "org.freedesktop.login1.Manager.PowerOff" boolean:true') != 0:
                 # Fallback to sudo poweroff
                 os.system('sudo poweroff')
-        pygame.quit()
 
+        pygame.quit()
 
 if __name__ == '__main__':
     Launcher().run()
