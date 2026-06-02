@@ -1,5 +1,5 @@
 [Unit]
-Description=Cabilltendo Launcher
+Description=Cavilltendo Launcher
 After=multi-user.target
 
 [Service]

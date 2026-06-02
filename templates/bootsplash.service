@@ -1,5 +1,5 @@
 [Unit]
-Description=Cabilltendo Boot Splash
+Description=Cavilltendo Boot Splash
 After=nodm.service
 Wants=nodm.service
 

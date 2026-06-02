@@ -9,4 +9,4 @@ source "${VENV_DIR}/bin/activate"
 export SDL_VIDEODRIVER=x11
 export SDL_AUDIODRIVER=alsa
 
-exec python3 "${CABILLTENDO_ROOT}/bootsplash.py"
+exec python3 "${CAVILLTENDO_ROOT}/bootsplash.py"

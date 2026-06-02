@@ -10,7 +10,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
-TEMPLATES_DIR="${CABILLTENDO_ROOT}/templates"
+TEMPLATES_DIR="${CAVILLTENDO_ROOT}/templates"
 
 # --- Helper
 log() { echo "[deploy]   $*" | tee -a "${SETUP_LOG}"; }
@@ -73,7 +73,7 @@ deploy_one() {
 # --- Deploy all (built-in mapping)
 deploy_all() {
     log "▸ Template directory: $TEMPLATES_DIR"
-    log "▸ Target prefix:      $CABILLTENDO_ROOT"
+    log "▸ Target prefix:      $CAVILLTENDO_ROOT"
 
     deploy_one "mednafen.cfg"               "$MEDNAFEN_CFG"                                          0
     deploy_one "cavilltendo.service"        "/etc/systemd/system/cavilltendo.service"                 0

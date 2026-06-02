@@ -15,7 +15,7 @@ HTML = r"""<!DOCTYPE html>
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Cabilltendo Remote</title>
+<title>Cavilltendo Remote</title>
 <style>
   body { background: #000; color:#fff; font-family:sans-serif;
          display:flex; flex-direction:column; align-items:center; padding:20px; margin:0; }
@@ -29,7 +29,7 @@ HTML = r"""<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h2>Cabilltendo</h2>
+<h2>Cavilltendo</h2>
 <div class="pad">
   <div></div><button onpointerdown="send('up')">&#9650;</button><div></div>
   <button onpointerdown="send('left')">&#9664;</button>

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # ---------------------------
-# Cabilltendo: main setup script
+# Cavilltendo: main setup script
 #
 # Run from the repo root:
 #    sudo bash scripts/setup.sh
 #
 # Override any config variable via environment:
-#    CABILLTENDO_ROOT=/custom/path sudo bash scripts/setup.sh
+#    CAVILLTENDO_ROOT=/custom/path sudo bash scripts/setup.sh
 #
 # Templates live in   ../templates/   (relative to this script)
 # Config defaults in  config.sh
@@ -16,7 +16,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-export CABILLTENDO_ROOT="${CABILLTENDO_ROOT:-$(dirname "$SCRIPT_DIR")}"
+export CAVILLTENDO_ROOT="${CAVILLTENDO_ROOT:-$(dirname "$SCRIPT_DIR")}"
 source "${SCRIPT_DIR}/config.sh"
 
 log() { echo "[setup]    $*" | tee -a "${SETUP_LOG}"; }
@@ -31,8 +31,8 @@ log "▐▌        ▐▛▀▚▖█ █ █   ▐▌  ▝▚▄▄▖█   █
 log "▝▚▄▄▖     ▐▙▄▞▘█ █ █   ▐▌             ▝▚▄▟▌      "
 log "                       ▐▌                        "
 log "                                                 "
-log " Cabilltendo Setup"
-log "   root     = $CABILLTENDO_ROOT"
+log " Cavilltendo Setup"
+log "   root     = $CAVILLTENDO_ROOT"
 log ""
 
 # ---------------------------
@@ -80,15 +80,15 @@ bash "${SCRIPT_DIR}/install_services.sh"
 # 3.  PERMISSIONS
 # ---------------------------
 log "── Setting ownership ──"
-chown -R "${USER_NAME}:${USER_NAME}" "${CABILLTENDO_ROOT}"
+chown -R "${USER_NAME}:${USER_NAME}" "${CAVILLTENDO_ROOT}"
 usermod -aG plugdev,video,input,tty "${USER_NAME}"
 
 log "============================================================"
-log " Cabilltendo setup completed!"
+log " Cavilltendo setup completed!"
 log ""
-log "   Project   : ${CABILLTENDO_ROOT}"
+log "   Project   : ${CAVILLTENDO_ROOT}"
 log "   ROMs      : ${ROMS_DIR}"
-log "   Frontend  : ${CABILLTENDO_ROOT}/launcher.py"
+log "   Frontend  : ${CAVILLTENDO_ROOT}/launcher.py"
 log "   Remote    : http://<pi-ip>:${REMOTE_PORT}"
 log "   Log       : ${SETUP_LOG}"
 log ""

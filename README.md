@@ -1,4 +1,4 @@
-# Cabilltendo
+# Cavilltendo
 
 Mednafen-based console emulator for the Raspberry Pi 4 🍓
 

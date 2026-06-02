@@ -62,8 +62,8 @@ UNKNOWN_CONSOLE = ConsoleInfo('???', (100, 100, 100), 'Unknown', ())
 ROM_EXTENSIONS = {ext for info in _CONSOLE_DATA.values() for ext in info.extensions}
 
 # -- UI strings -------------------
-WINDOW_TITLE  = 'Cabilltendo | Sistemas Embebidos'
-LOGO_TITLE    = 'CABILLTENDO'
+WINDOW_TITLE  = 'Cavilltendo | Sistemas Embebidos'
+LOGO_TITLE    = 'CAVILLTENDO'
 LOGO_SUBTITLE = 'Henry Cavill Entertainment'
 SECTION_TITLE = 'GAME SELECT'
 NO_ROMS_MSG   = 'No ROMs found'

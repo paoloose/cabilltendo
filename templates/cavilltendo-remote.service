@@ -1,5 +1,5 @@
 [Unit]
-Description=Cabilltendo Remote Control
+Description=Cavilltendo Remote Control
 After=network.target
 
 [Service]
