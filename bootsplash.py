@@ -45,7 +45,7 @@ def run():
         logo.set_alpha(alpha)
         screen.blit(logo, logo_rect)
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(50)
 
     hold_start = time.time()
     while time.time() - hold_start < 2.8:
@@ -56,14 +56,14 @@ def run():
         screen.fill((0, 0, 0))
         screen.blit(logo, logo_rect)
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(50)
 
     for alpha in range(255, -1, -5):
         screen.fill((0, 0, 0))
         logo.set_alpha(alpha)
         screen.blit(logo, logo_rect)
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(50)
 
     pygame.quit()
 

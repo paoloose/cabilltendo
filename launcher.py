@@ -884,6 +884,10 @@ class Launcher:
             self._notify_until = pygame.time.get_ticks() + 3000
             return
         rom = self.roms[self.selected]
+        if self.joystick:
+            self.joystick.quit()
+            self.joystick = None
+        pygame.joystick.quit()
         pygame.display.quit()
         try:
             cmd = [MEDNAFEN_BIN, '-video.fs', '1']
@@ -906,8 +910,13 @@ class Launcher:
             self._notify_text = f'Launch failed: {e}'
             self._notify_until = pygame.time.get_ticks() + 4000
         finally:
+            pygame.display.init()
+            pygame.joystick.init()
             self.screen = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
             pygame.mouse.set_visible(False)
+            if pygame.joystick.get_count() > 0:
+                self.joystick = pygame.joystick.Joystick(0)
+                self.joystick.init()
 
     def handle_input(self) -> None:
         now = pygame.time.get_ticks()
