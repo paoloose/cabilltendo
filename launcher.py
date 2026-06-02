@@ -965,6 +965,17 @@ class Launcher:
         rom = self.roms[self.selected]
         # Fully release SDL so mednafen can take over display, audio and input
         pygame.quit()
+
+        # Restore golden mednafen config to prevent corruption
+        try:
+            import shutil
+            golden_cfg = os.path.join(SCRIPT_DIR, 'mednafen_cfg', 'mednafen-full.cfg')
+            user_cfg = os.path.expanduser('~/.mednafen/mednafen.cfg')
+            if os.path.exists(golden_cfg):
+                os.makedirs(os.path.dirname(user_cfg), exist_ok=True)
+                shutil.copy2(golden_cfg, user_cfg)
+        except Exception as e:
+            print(f"Warning: could not restore golden mednafen config: {e}")
         try:
             cmd = [MEDNAFEN_BIN, '-video.fs', '1']
             cmd.append(rom.path)
