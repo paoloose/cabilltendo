@@ -28,7 +28,7 @@ MEDNAFEN_CFG   = environ.get('MEDNAFEN_CFG', path.join(SCRIPT_DIR, 'templates', 
 ROMS_DIR       = environ.get('ROMS_DIR', path.join(SCRIPT_DIR, 'roms'))
 FONT_PIXEL     = environ.get('PIXEL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Pixelitta-Regular.ttf'))
 FONT_DIGITAL   = environ.get('DIGITAL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Digital808.ttf'))
-CONSOLE_LOGO   = environ.get('LOGO_IMAGE', path.join(SCRIPT_DIR, 'assets/henry.png'))
+CONSOLE_LOGO   = path.join(SCRIPT_DIR, 'assets/henry.png')
 SELECTOR_IMAGE = environ.get('SELECTOR_IMAGE', path.join(SCRIPT_DIR, 'assets/selector.png'))
 THUMBNAILS_DIR = environ.get('THUMBNAILS_DIR', path.join(SCRIPT_DIR, 'thumbnails'))
 USB_LOG_FILE  = environ.get('USB_LOG', '/tmp/usb_roms.log')
@@ -566,8 +566,9 @@ class Launcher:
             self.joystick.init()
 
         self.running = True
+        self.skip_shutdown = False
         self.show_exit_dialog = False
-        self.exit_dialog_option = 0
+        self.exit_dialog_opened_at = 0
 
         self._new_rom_paths: set[str] = set()
         self._notify_text = ''
@@ -987,6 +988,8 @@ class Launcher:
 
             elif event.type == pygame.KEYDOWN:
                 if self.show_exit_dialog:
+                    if now - self.exit_dialog_opened_at < 500:
+                        continue
                     if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_y):
                         self.running = False
                     else:
@@ -995,8 +998,12 @@ class Launcher:
 
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     self._launch_current()
+                elif event.key == pygame.K_F9:
+                    self.running = False
+                    self.skip_shutdown = True
                 elif event.key == pygame.K_ESCAPE:
                     self.show_exit_dialog = True
+                    self.exit_dialog_opened_at = now
                 elif event.key not in (pygame.K_UP, pygame.K_DOWN):
                     self._notify_text = f'Key pressed: {pygame.key.name(event.key)}'
                     self._notify_until = pygame.time.get_ticks() + 2000
@@ -1017,6 +1024,8 @@ class Launcher:
 
             elif event.type == pygame.JOYBUTTONDOWN:
                 if self.show_exit_dialog:
+                    if now - self.exit_dialog_opened_at < 500:
+                        continue
                     # B is typically button 1 (or 2 on some pads). We'll assume Button 1 is B (confirm shutdown).
                     if event.button == 1:
                         self.running = False
@@ -1041,6 +1050,7 @@ class Launcher:
         if self._select_held and self._start_held:
             if not self.show_exit_dialog:
                 self.show_exit_dialog = True
+                self.exit_dialog_opened_at = now
                 self._select_held = False
                 self._start_held = False
 
@@ -1125,7 +1135,7 @@ class Launcher:
 
         self.usb_monitor.stop()
         self.usb_monitor.join()
-        if IS_RASPBERRY:
+        if IS_RASPBERRY and not self.skip_shutdown:
             # First try dbus poweroff (works for unprivileged users on systemd)
             if os.system('dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 "org.freedesktop.login1.Manager.PowerOff" boolean:true') != 0:
                 # Fallback to sudo poweroff
