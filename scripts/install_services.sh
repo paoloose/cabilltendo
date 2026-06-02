@@ -15,6 +15,5 @@ systemctl disable --now bootsplash.service 2>/dev/null || true
 
 log "Enabling services …"
 systemctl enable cavilltendo.service
-systemctl enable cavilltendo-remote.service
 
 log "All services enabled."
