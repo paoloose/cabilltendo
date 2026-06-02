@@ -10,6 +10,9 @@ log() { echo "[systemd]  $*" | tee -a "${SETUP_LOG}"; }
 log "Reloading systemd …"
 systemctl daemon-reload
 
+# Bootsplash is embedded in run_launcher.sh; disable standalone service if stale
+systemctl disable --now bootsplash.service 2>/dev/null || true
+
 log "Enabling services …"
 systemctl enable cavilltendo.service
 systemctl enable cavilltendo-remote.service

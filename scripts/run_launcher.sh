@@ -11,5 +11,9 @@ export SDL_VIDEODRIVER=x11
 export SDL_AUDIODRIVER=alsa
 export IS_RASPBERRY=true
 
+# Clean X environment: black background, no cursor blink, no screensaver
+xsetroot -solid black 2>/dev/null || true
+xset s off -dpms 2>/dev/null || true
+
 "${PYTHON_BIN}" "${CABILLTENDO_ROOT}/bootsplash.py"
 exec "${PYTHON_BIN}" "${CABILLTENDO_ROOT}/launcher.py"
