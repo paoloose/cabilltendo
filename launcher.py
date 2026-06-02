@@ -30,6 +30,7 @@ FONT_PIXEL     = environ.get('PIXEL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/P
 FONT_DIGITAL   = environ.get('DIGITAL_FONT', path.join(SCRIPT_DIR, 'assets/fonts/Digital808.ttf'))
 CONSOLE_LOGO   = path.join(SCRIPT_DIR, 'assets/henry.png')
 SELECTOR_IMAGE = environ.get('SELECTOR_IMAGE', path.join(SCRIPT_DIR, 'assets/selector.png'))
+TRANSITION_IMAGE = environ.get('TRANSITION_IMAGE', SELECTOR_IMAGE)
 THUMBNAILS_DIR = environ.get('THUMBNAILS_DIR', path.join(SCRIPT_DIR, 'thumbnails'))
 USB_LOG_FILE  = environ.get('USB_LOG', '/tmp/usb_roms.log')
 
@@ -534,10 +535,21 @@ class Launcher:
 
         # --- selector cursor ---
         self.selector_img: Optional[pygame.Surface] = None
-        raw_sel = _load_image(SELECTOR_IMAGE)
-        if raw_sel:
-            sel_sz = int(L.item_h * 0.8)
+        sel_sz = int(L.item_h * 0.8)
+        # --- images ---
+        try:
+            raw_sel = pygame.image.load(SELECTOR_IMAGE).convert_alpha()
             self.selector_img = pygame.transform.smoothscale(raw_sel, (sel_sz, sel_sz))
+        except Exception:
+            self.selector_img = pygame.Surface((sel_sz, sel_sz), pygame.SRCALPHA)
+            pygame.draw.rect(self.selector_img, GOLD, self.selector_img.get_rect(), width=4, border_radius=L.radius)
+
+        try:
+            self.transition_img_raw = pygame.image.load(TRANSITION_IMAGE).convert_alpha()
+        except Exception:
+            s = pygame.Surface((100, 100), pygame.SRCALPHA)
+            pygame.draw.circle(s, BLACK, (50, 50), 50)
+            self.transition_img_raw = s
 
         # --- ROMs ---
         self.roms = scan_roms(ROMS_DIR)
@@ -569,6 +581,8 @@ class Launcher:
         self.skip_shutdown = False
         self.show_exit_dialog = False
         self.exit_dialog_opened_at = 0
+        self.transitioning = False
+        self.transition_progress = 0.0
 
         self._new_rom_paths: set[str] = set()
         self._notify_text = ''
@@ -854,6 +868,39 @@ class Launcher:
         self._draw_bottom_bar()
         self._draw_notification()
         self._draw_exit_dialog()
+        self._draw_transition()
+
+    def _draw_transition(self) -> None:
+        if not self.transitioning:
+            return
+
+        import math
+        # Hypotenuse gives us the diagonal so it covers the whole screen.
+        # We multiply by 2 to account for image padding or irregular shapes.
+        max_size = math.ceil(math.hypot(self.W, self.H)) * 2
+
+        # Quadratic ease-in for a snappy start and fast finish
+        p = self.transition_progress ** 2
+        size = int(max_size * p)
+
+        orig_w = self.transition_img_raw.get_width()
+        if orig_w == 0: orig_w = 1
+        scale = size / float(orig_w)
+
+        # 2 full spins (720 degrees) over the transition
+        angle = -720 * self.transition_progress
+
+        if scale > 0.01:
+            img = pygame.transform.rotozoom(self.transition_img_raw, angle, scale)
+            rect = img.get_rect(center=(self.W // 2, self.H // 2))
+            self.screen.blit(img, rect)
+
+        # Fade the entire screen to black
+        alpha = int(255 * self.transition_progress)
+        if alpha > 0:
+            fade = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
+            fade.fill((0, 0, 0, alpha))
+            self.screen.blit(fade, (0, 0))
 
     def _draw_exit_dialog(self) -> None:
         if not self.show_exit_dialog:
@@ -963,6 +1010,11 @@ class Launcher:
                 del self._launch_error
 
     def handle_input(self) -> None:
+        if self.transitioning:
+            # Drain queue but ignore inputs during transition
+            pygame.event.pump()
+            return
+
         now = pygame.time.get_ticks()
 
         try:
@@ -1011,7 +1063,8 @@ class Launcher:
                     continue
 
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    self._launch_current()
+                    self.transitioning = True
+                    self.transition_progress = 0.0
                 elif event.key == pygame.K_F9:
                     self.running = False
                     self.skip_shutdown = True
@@ -1049,7 +1102,8 @@ class Launcher:
                     continue
 
                 if event.button in (0, 1):
-                    self._launch_current()
+                    self.transitioning = True
+                    self.transition_progress = 0.0
                 elif event.button in (6, 8):
                     self._select_held = True
                 elif event.button in (7, 9):
@@ -1142,7 +1196,15 @@ class Launcher:
                 self.usb_monitor.new_rom_paths = []
                 self._refresh_roms()
 
-            self.handle_input()
+            if self.transitioning:
+                self.transition_progress += dt / 500.0  # 500ms transition
+                if self.transition_progress >= 1.0:
+                    self._launch_current()
+                    self.transitioning = False
+                    self.transition_progress = 0.0
+            else:
+                self.handle_input()
+
             self.draw()
             pygame.display.flip()
             self.clock.tick(60)
