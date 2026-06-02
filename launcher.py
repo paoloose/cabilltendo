@@ -884,11 +884,8 @@ class Launcher:
             self._notify_until = pygame.time.get_ticks() + 3000
             return
         rom = self.roms[self.selected]
-        if self.joystick:
-            self.joystick.quit()
-            self.joystick = None
-        pygame.joystick.quit()
-        pygame.display.quit()
+        # Fully release SDL so mednafen can take over display, audio and input
+        pygame.quit()
         try:
             cmd = [MEDNAFEN_BIN, '-video.fs', '1']
             if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
@@ -907,16 +904,33 @@ class Launcher:
             hotkey.stop()
             hotkey.join()
         except Exception as e:
-            self._notify_text = f'Launch failed: {e}'
-            self._notify_until = pygame.time.get_ticks() + 4000
+            self._launch_error = f'Launch failed: {e}'
         finally:
-            pygame.display.init()
+            # Reinitialize all pygame subsystems
+            pygame.init()
             pygame.joystick.init()
-            self.screen = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
             pygame.mouse.set_visible(False)
+            self.screen = pygame.display.set_mode((self.W, self.H), pygame.FULLSCREEN)
+            pygame.display.set_caption(WINDOW_TITLE)
+            self.clock = pygame.time.Clock()
+            self.joystick = None
             if pygame.joystick.get_count() > 0:
                 self.joystick = pygame.joystick.Joystick(0)
                 self.joystick.init()
+            # Re-create fonts (invalidated by pygame.quit)
+            L = self.layout
+            self.font_label   = pygame.font.Font(FONT_PIXEL,   L.font_label)
+            self.font_title   = pygame.font.Font(FONT_DIGITAL, L.font_title)
+            self.font_sub     = pygame.font.Font(FONT_PIXEL,   L.font_sub)
+            self.font_section = pygame.font.Font(FONT_DIGITAL, L.font_section)
+            self.font_game    = pygame.font.Font(FONT_DIGITAL, L.font_game)
+            self.font_pub_lbl = pygame.font.Font(FONT_PIXEL,   L.font_pub_lbl)
+            self.font_pub_nm  = pygame.font.Font(FONT_DIGITAL, L.font_pub_nm)
+            self.font_hint    = pygame.font.Font(FONT_PIXEL,   L.font_hint)
+            if hasattr(self, '_launch_error'):
+                self._notify_text = self._launch_error
+                self._notify_until = pygame.time.get_ticks() + 4000
+                del self._launch_error
 
     def handle_input(self) -> None:
         now = pygame.time.get_ticks()
