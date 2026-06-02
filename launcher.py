@@ -859,38 +859,25 @@ class Launcher:
             return
 
         s = pygame.Surface((self.W, self.H), pygame.SRCALPHA)
-        s.fill((0, 0, 0, 200))
+        s.fill((0, 0, 0, 210))
         self.screen.blit(s, (0, 0))
 
         L = self.layout
-        box_w = max(300, int(self.W * 0.35))
-        box_h = max(150, int(self.H * 0.22))
+        box_w = max(340, int(self.W * 0.45))
+        box_h = max(180, int(self.H * 0.28))
         box_r = pygame.Rect((self.W - box_w) // 2, (self.H - box_h) // 2, box_w, box_h)
 
         pygame.draw.rect(self.screen, PANEL_BG, box_r, border_radius=L.radius)
-        pygame.draw.rect(self.screen, RED, box_r, width=2, border_radius=L.radius)
+        pygame.draw.rect(self.screen, RED, box_r, width=3, border_radius=L.radius)
 
-        text = self.font_section.render("SHUTDOWN CONSOLE?", True, WHITE)
-        self.screen.blit(text, (box_r.centerx - text.get_width() // 2, box_r.y + int(box_h * 0.25)))
+        text = self.font_title.render("SHUTDOWN CONSOLE?", True, RED_TITLE)
+        self.screen.blit(text, (box_r.centerx - text.get_width() // 2, box_r.y + int(box_h * 0.15)))
 
-        btn_w = int(box_w * 0.35)
-        btn_h = int(box_h * 0.25)
-        btn_y = box_r.y + int(box_h * 0.6)
+        msg1 = self.font_game.render("Press B to Power Off", True, WHITE)
+        msg2 = self.font_game.render("Press A to Cancel", True, MUTED)
 
-        no_r = pygame.Rect(box_r.centerx - btn_w - 15, btn_y, btn_w, btn_h)
-        yes_r = pygame.Rect(box_r.centerx + 15, btn_y, btn_w, btn_h)
-
-        pygame.draw.rect(self.screen, SEL_BG if self.exit_dialog_option == 0 else BG_DARK, no_r, border_radius=4)
-        pygame.draw.rect(self.screen, SEL_BG if self.exit_dialog_option == 1 else BG_DARK, yes_r, border_radius=4)
-        
-        pygame.draw.rect(self.screen, GOLD if self.exit_dialog_option == 0 else MUTED, no_r, width=2, border_radius=4)
-        pygame.draw.rect(self.screen, GOLD if self.exit_dialog_option == 1 else MUTED, yes_r, width=2, border_radius=4)
-
-        lbl_no = self.font_game.render("NO", True, WHITE if self.exit_dialog_option == 0 else MUTED)
-        lbl_yes = self.font_game.render("YES", True, WHITE if self.exit_dialog_option == 1 else MUTED)
-
-        self.screen.blit(lbl_no, (no_r.centerx - lbl_no.get_width() // 2, no_r.centery - lbl_no.get_height() // 2))
-        self.screen.blit(lbl_yes, (yes_r.centerx - lbl_yes.get_width() // 2, yes_r.centery - lbl_yes.get_height() // 2))
+        self.screen.blit(msg1, (box_r.centerx - msg1.get_width() // 2, box_r.y + int(box_h * 0.55)))
+        self.screen.blit(msg2, (box_r.centerx - msg2.get_width() // 2, box_r.y + int(box_h * 0.75)))
 
     def _draw_notification(self) -> None:
         if not self._notify_text:
@@ -1000,42 +987,28 @@ class Launcher:
 
             elif event.type == pygame.KEYDOWN:
                 if self.show_exit_dialog:
-                    if event.key == pygame.K_ESCAPE:
+                    if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_y):
+                        self.running = False
+                    else:
                         self.show_exit_dialog = False
-                    elif event.key in (pygame.K_LEFT, pygame.K_RIGHT):
-                        self.exit_dialog_option = 1 - self.exit_dialog_option
-                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                        if self.exit_dialog_option == 1:
-                            self.running = False
-                        else:
-                            self.show_exit_dialog = False
                     continue
 
                 if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     self._launch_current()
                 elif event.key == pygame.K_ESCAPE:
                     self.show_exit_dialog = True
-                    self.exit_dialog_option = 0
                 elif event.key not in (pygame.K_UP, pygame.K_DOWN):
                     self._notify_text = f'Key pressed: {pygame.key.name(event.key)}'
                     self._notify_until = pygame.time.get_ticks() + 2000
 
             elif event.type == pygame.JOYHATMOTION:
                 if self.show_exit_dialog:
-                    if event.value in ((-1, 0), (1, 0)):
-                        self.exit_dialog_option = 1 - self.exit_dialog_option
                     continue
                 if event.value in ((0, 1), (0, -1)):
                     self._navigate(1 if event.value == (0, -1) else -1)
 
             elif event.type == pygame.JOYAXISMOTION:
-                if event.axis == 0 and self.show_exit_dialog:
-                    if event.value < -AXIS_DEADZONE and now - self.joy_up_ms > AXIS_RATE_MS:
-                        self.exit_dialog_option = 1 - self.exit_dialog_option
-                        self.joy_up_ms = now
-                    elif event.value > AXIS_DEADZONE and now - self.joy_down_ms > AXIS_RATE_MS:
-                        self.exit_dialog_option = 1 - self.exit_dialog_option
-                        self.joy_down_ms = now
+                if self.show_exit_dialog:
                     continue
 
                 if event.axis == 1:
@@ -1044,11 +1017,12 @@ class Launcher:
 
             elif event.type == pygame.JOYBUTTONDOWN:
                 if self.show_exit_dialog:
-                    if event.button in (0, 1, 7, 9):
-                        if self.exit_dialog_option == 1:
-                            self.running = False
-                        else:
-                            self.show_exit_dialog = False
+                    # B is typically button 1 (or 2 on some pads). We'll assume Button 1 is B (confirm shutdown).
+                    if event.button == 1:
+                        self.running = False
+                    else:
+                        # Any other button cancels
+                        self.show_exit_dialog = False
                     continue
 
                 if event.button in (0, 1):
@@ -1067,7 +1041,6 @@ class Launcher:
         if self._select_held and self._start_held:
             if not self.show_exit_dialog:
                 self.show_exit_dialog = True
-                self.exit_dialog_option = 0
                 self._select_held = False
                 self._start_held = False
 
@@ -1154,7 +1127,10 @@ class Launcher:
         self.usb_monitor.join()
         pygame.quit()
         if IS_RASPBERRY:
-            os.system('sudo shutdown -h now')
+            # First try dbus poweroff (works for unprivileged users on systemd)
+            if os.system('dbus-send --system --print-reply --dest=org.freedesktop.login1 /org/freedesktop/login1 "org.freedesktop.login1.Manager.PowerOff" boolean:true') != 0:
+                # Fallback to sudo poweroff
+                os.system('sudo poweroff')
 
 
 if __name__ == '__main__':
