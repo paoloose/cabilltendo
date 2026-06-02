@@ -76,7 +76,7 @@ bash "${SCRIPT_DIR}/deploy.sh" all
 log "── Installing mednafen config ──"
 MEDNAFEN_HOME="/home/${USER_NAME}/.mednafen"
 mkdir -p "${MEDNAFEN_HOME}"
-cp "${CABILLTENDO_ROOT}/mednafen_cfg/mednafen-full.cfg" "${MEDNAFEN_HOME}/mednafen.cfg"
+cp "${CAVILLTENDO_ROOT}/mednafen_cfg/mednafen-full.cfg" "${MEDNAFEN_HOME}/mednafen.cfg"
 chown -R "${USER_NAME}:${USER_NAME}" "${MEDNAFEN_HOME}"
 log "  Installed to ${MEDNAFEN_HOME}/mednafen.cfg"
 

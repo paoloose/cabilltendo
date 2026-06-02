@@ -888,8 +888,6 @@ class Launcher:
         pygame.quit()
         try:
             cmd = [MEDNAFEN_BIN, '-video.fs', '1']
-            if MEDNAFEN_CFG and path.isfile(MEDNAFEN_CFG):
-                cmd += ['-ovconfig', MEDNAFEN_CFG]
             cmd.append(rom.path)
             proc = subprocess.Popen(cmd)
             hotkey = _GamepadHotkey(proc.pid)
