@@ -15,5 +15,5 @@ export IS_RASPBERRY=true
 xsetroot -solid black 2>/dev/null || true
 xset s off -dpms 2>/dev/null || true
 
-"${PYTHON_BIN}" "${CAVILLTENDO_ROOT}/bootsplash.py"
+"${PYTHON_BIN}" "${CAVILLTENDO_ROOT}/bootsplash.py" || true
 exec "${PYTHON_BIN}" "${CAVILLTENDO_ROOT}/launcher.py"

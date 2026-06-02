@@ -47,8 +47,8 @@ def run():
         pygame.display.flip()
         clock.tick(50)
 
-    hold_start = time.time()
-    while time.time() - hold_start < 2.8:
+    hold_start = pygame.time.get_ticks()
+    while pygame.time.get_ticks() - hold_start < 2800:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
