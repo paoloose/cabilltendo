@@ -38,7 +38,7 @@ log ""
 # ---------------------------
 # 1.  INSTALL DEPENDENCIES
 # ---------------------------
-log "── Installing dependencies ──"
+log "-- Installing dependencies --"
 apt-get update -qq
 apt-get install -y -qq \
     mednafen \
@@ -56,7 +56,7 @@ log "  Dependencies installed."
 # ---------------------------
 # 1b. PYTHON VENV
 # ---------------------------
-log "── Setting up Python venv ──"
+log "-- Setting up Python venv --"
 if [ ! -d "${VENV_DIR}" ]; then
     sudo -u "${USER_NAME}" python3 -m venv --system-site-packages "${VENV_DIR}"
     log "  Created venv at ${VENV_DIR}"
@@ -67,13 +67,13 @@ fi
 # ---------------------------
 # 2.  DEPLOY  (render templates)
 # ---------------------------
-log "── Deploying templates ──"
+log "-- Deploying templates --"
 bash "${SCRIPT_DIR}/deploy.sh" all
 
 # ---------------------------
 # 2b. MEDNAFEN CONFIG (full config with joystick bindings)
 # ---------------------------
-log "── Installing mednafen config ──"
+log "-- Installing mednafen config --"
 MEDNAFEN_HOME="/home/${USER_NAME}/.mednafen"
 mkdir -p "${MEDNAFEN_HOME}"
 cp "${CAVILLTENDO_ROOT}/mednafen_cfg/mednafen-full.cfg" "${MEDNAFEN_HOME}/mednafen.cfg"
@@ -83,15 +83,16 @@ log "  Installed to ${MEDNAFEN_HOME}/mednafen.cfg"
 # ---------------------------
 # 2.  INSTALL SERVICES
 # ---------------------------
-log "── Installing services ──"
+log "-- Installing services --"
 bash "${SCRIPT_DIR}/install_services.sh"
 
 # ---------------------------
-# 3.  PERMISSIONS
+# 3.  PERMISSIONS & AUDIO
 # ---------------------------
-log "── Setting ownership ──"
+log "-- Setting ownership and audio routing --"
 chown -R "${USER_NAME}:${USER_NAME}" "${CAVILLTENDO_ROOT}"
 usermod -aG plugdev,video,input,tty "${USER_NAME}"
+sudo -u "${USER_NAME}" bash "${SCRIPT_DIR}/force_audio_jack.sh"
 
 log "============================================================"
 log " Cavilltendo setup completed!"
